@@ -404,6 +404,35 @@ a {
   gap: 8px;
 }
 
+.list-status {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(247, 251, 252, 0.1);
+  border-radius: var(--radius);
+  background: rgba(4, 27, 45, 0.94);
+  color: var(--muted);
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.list-status button,
+.pipeline-more {
+  min-height: 30px;
+  border: 1px solid rgba(41, 231, 205, 0.22);
+  border-radius: var(--radius);
+  background: rgba(41, 231, 205, 0.08);
+  color: var(--turquoise);
+  padding: 0 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
 .lead-card {
   width: 100%;
   min-height: 126px;
@@ -904,6 +933,12 @@ a {
   display: grid;
   gap: 8px;
   padding: 10px;
+}
+
+.pipeline-more {
+  width: 100%;
+  min-height: 34px;
+  justify-content: center;
 }
 
 .pipeline-card {

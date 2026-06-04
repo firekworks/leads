@@ -40,6 +40,8 @@ const contentUses: ContentUse[] = [
   "Muy trabajado"
 ];
 
+const RADAR_PAGE_SIZE = 80;
+
 type EnrichResponse = Partial<
   Pick<
     Lead,
@@ -68,6 +70,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const [findingOwnerId, setFindingOwnerId] = useState("");
   const [importingPlaces, setImportingPlaces] = useState(false);
   const [placesMessage, setPlacesMessage] = useState("Foia preparada: Castalla, Ibi, Onil, Biar y Tibi");
+  const [visibleLeadCount, setVisibleLeadCount] = useState(RADAR_PAGE_SIZE);
 
   useEffect(() => {
     let active = true;
@@ -142,6 +145,23 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     withoutInstagram,
     withoutWeb
   ]);
+
+  useEffect(() => {
+    setVisibleLeadCount(RADAR_PAGE_SIZE);
+  }, [
+    city,
+    contentUse,
+    followersBucket,
+    minScore,
+    query,
+    sector,
+    status,
+    withoutFacebook,
+    withoutInstagram,
+    withoutWeb
+  ]);
+
+  const visibleLeads = filteredLeads.slice(0, visibleLeadCount);
 
   const selectedLead =
     filteredLeads.find((lead) => lead.id === selectedId) || filteredLeads[0] || leadItems[0];
@@ -410,14 +430,29 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 
                 <div className="lead-list">
                   {filteredLeads.length ? (
-                    filteredLeads.map((lead) => (
-                      <LeadCard
-                        key={lead.id}
-                        lead={lead}
-                        active={lead.id === selectedLead?.id}
-                        onSelect={handleSelect}
-                      />
-                    ))
+                    <>
+                      <div className="list-status">
+                        <span>
+                          Mostrando {visibleLeads.length} de {filteredLeads.length}
+                        </span>
+                        {visibleLeads.length < filteredLeads.length ? (
+                          <button
+                            type="button"
+                            onClick={() => setVisibleLeadCount((current) => current + RADAR_PAGE_SIZE)}
+                          >
+                            Ver más
+                          </button>
+                        ) : null}
+                      </div>
+                      {visibleLeads.map((lead) => (
+                        <LeadCard
+                          key={lead.id}
+                          lead={lead}
+                          active={lead.id === selectedLead?.id}
+                          onSelect={handleSelect}
+                        />
+                      ))}
+                    </>
                   ) : (
                     <div className="empty-panel">
                       <strong>No hay leads con esos filtros</strong>
