@@ -6,15 +6,22 @@ const sectorPotential: Record<string, number> = {
   Cafeterías: 9,
   Panaderías: 8,
   Clínicas: 13,
+  Fisioterapia: 11,
+  Farmacias: 9,
   Ópticas: 11,
   Veterinarios: 11,
   Gimnasios: 11,
   Estética: 10,
   Peluquerías: 8,
+  Barberías: 8,
   Academias: 10,
+  Autoescuelas: 9,
+  "Centros infantiles": 9,
   Talleres: 8,
   Inmobiliarias: 12,
   Moda: 9,
+  Zapaterías: 8,
+  Deporte: 9,
   Floristerías: 8,
   Decoración: 9,
   Muebles: 10,
@@ -29,15 +36,22 @@ const monthlyBaseBySector: Record<string, number> = {
   Cafeterías: 300,
   Panaderías: 260,
   Clínicas: 680,
+  Fisioterapia: 520,
+  Farmacias: 380,
   Ópticas: 520,
   Veterinarios: 520,
   Gimnasios: 520,
   Estética: 420,
   Peluquerías: 280,
+  Barberías: 280,
   Academias: 450,
+  Autoescuelas: 360,
+  "Centros infantiles": 360,
   Talleres: 360,
   Inmobiliarias: 620,
   Moda: 380,
+  Zapaterías: 320,
+  Deporte: 360,
   Floristerías: 300,
   Decoración: 420,
   Muebles: 520,
@@ -183,7 +197,11 @@ export function explainPotential(lead: Lead) {
     reasons.push("Demanda local");
   }
 
-  if (["Clínicas", "Inmobiliarias", "Hoteles", "Turismo rural", "Gimnasios", "Estética"].includes(lead.sector)) {
+  if (
+    ["Clínicas", "Fisioterapia", "Inmobiliarias", "Hoteles", "Turismo rural", "Gimnasios", "Estética"].includes(
+      lead.sector
+    )
+  ) {
     reasons.push("Ticket alto");
   }
 

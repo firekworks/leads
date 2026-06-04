@@ -40,15 +40,22 @@ const DEFAULT_TYPES: LeadSector[] = [
   "Cafeterías",
   "Panaderías",
   "Clínicas",
+  "Fisioterapia",
+  "Farmacias",
   "Ópticas",
   "Veterinarios",
   "Gimnasios",
   "Estética",
   "Peluquerías",
+  "Barberías",
   "Academias",
+  "Autoescuelas",
+  "Centros infantiles",
   "Talleres",
   "Inmobiliarias",
   "Moda",
+  "Zapaterías",
+  "Deporte",
   "Floristerías",
   "Decoración",
   "Muebles",
@@ -393,11 +400,18 @@ function mergeImportedLead(existing: Lead | undefined, incoming: Lead) {
 function inferSector(querySector: string, types: string[]) {
   const normalized = querySector.toLowerCase();
   if (normalized.includes("clín") || types.includes("dentist") || types.includes("doctor")) return "Clínicas";
+  if (normalized.includes("fisio") || types.includes("physiotherapist")) return "Fisioterapia";
+  if (normalized.includes("farmacia") || types.includes("pharmacy")) return "Farmacias";
   if (normalized.includes("óptic") || types.includes("optician")) return "Ópticas";
   if (normalized.includes("veterin") || types.includes("veterinary_care")) return "Veterinarios";
   if (normalized.includes("gim") || types.includes("gym")) return "Gimnasios";
   if (normalized.includes("estética") || types.includes("beauty_salon") || types.includes("spa")) return "Estética";
+  if (normalized.includes("barber")) return "Barberías";
   if (normalized.includes("pelu") || types.includes("hair_care")) return "Peluquerías";
+  if (normalized.includes("autoescuela") || types.includes("driving_school")) return "Autoescuelas";
+  if (normalized.includes("infantil") || normalized.includes("guardería") || types.includes("preschool")) {
+    return "Centros infantiles";
+  }
   if (normalized.includes("academ") || types.includes("school")) return "Academias";
   if (normalized.includes("taller") || types.includes("car_repair")) return "Talleres";
   if (normalized.includes("inmobili") || types.includes("real_estate_agency")) return "Inmobiliarias";
@@ -405,6 +419,8 @@ function inferSector(querySector: string, types: string[]) {
   if (normalized.includes("bar") || types.includes("bar")) return "Bares";
   if (normalized.includes("panader") || types.includes("bakery")) return "Panaderías";
   if (normalized.includes("rest") || types.includes("restaurant")) return "Restaurantes";
+  if (normalized.includes("zapater") || normalized.includes("calzado") || types.includes("shoe_store")) return "Zapaterías";
+  if (normalized.includes("deporte") || types.includes("sporting_goods_store")) return "Deporte";
   if (normalized.includes("ropa") || normalized.includes("moda") || types.includes("clothing_store")) return "Moda";
   if (normalized.includes("flor") || types.includes("florist")) return "Floristerías";
   if (normalized.includes("decor") || types.includes("home_goods_store")) return "Decoración";
@@ -419,6 +435,8 @@ function inferSector(querySector: string, types: string[]) {
 function estimatePotential(sector: string, reviews: number, rating: number) {
   const sectorBase: Record<string, number> = {
     Clínicas: 850,
+    Fisioterapia: 660,
+    Farmacias: 500,
     Inmobiliarias: 760,
     Hoteles: 760,
     "Turismo rural": 720,
@@ -428,14 +446,19 @@ function estimatePotential(sector: string, reviews: number, rating: number) {
     Ópticas: 600,
     Estética: 520,
     Academias: 560,
+    Autoescuelas: 500,
+    "Centros infantiles": 460,
     Muebles: 560,
     Decoración: 500,
     Moda: 460,
+    Zapaterías: 420,
+    Deporte: 460,
     Talleres: 480,
     Bares: 430,
     Cafeterías: 400,
     Floristerías: 380,
     Peluquerías: 360,
+    Barberías: 360,
     Panaderías: 340
   };
   const reputationLift = reviews >= 200 ? 160 : reviews >= 75 ? 90 : reviews >= 20 ? 40 : 0;
