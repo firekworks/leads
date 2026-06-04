@@ -1785,6 +1785,15 @@ a {
   .quick-actions {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  .pipeline-board {
+    grid-template-columns: 1fr;
+    overflow-x: visible;
+  }
+
+  .pipeline-column {
+    min-height: 0;
+  }
 }
 
 @media (max-width: 560px) {
