@@ -1509,10 +1509,11 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin: -2px 0 10px;
+  margin: -2px 0 8px;
 }
 
-.plan-strip span {
+.plan-strip span,
+.reason-strip span {
   min-height: 26px;
   display: inline-flex;
   align-items: center;
@@ -1523,6 +1524,19 @@ a {
   padding: 3px 9px;
   font-size: 0.74rem;
   font-weight: 850;
+}
+
+.reason-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.reason-strip span {
+  border-color: rgba(247, 251, 252, 0.1);
+  background: rgba(247, 251, 252, 0.055);
+  color: var(--muted);
 }
 
 .quick-actions {

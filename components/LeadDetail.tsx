@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ContentUse, FollowersBucket, Lead, LeadStatus } from "@/types/lead";
 import { googleSearchUrls } from "@/lib/leads-repository";
-import { estimateMonthlyValue, recommendServicePlan, scoreLabel } from "@/lib/scoring";
+import { estimateMonthlyValue, explainPotential, recommendServicePlan, scoreLabel } from "@/lib/scoring";
 import { statusTone } from "@/lib/status";
 import { ScoreRing } from "@/components/ScoreRing";
 
@@ -48,6 +48,7 @@ export function LeadDetail({
   const searchUrls = useMemo(() => googleSearchUrls(draft), [draft]);
   const monthlyValue = estimateMonthlyValue(draft);
   const plan = recommendServicePlan(draft);
+  const potentialReasons = explainPotential(draft);
 
   useEffect(() => {
     setDraft(lead);
@@ -90,6 +91,12 @@ export function LeadDetail({
         <span>{plan.visits}</span>
         <span>{plan.content}</span>
         <span>{draft.contentUse}</span>
+      </div>
+
+      <div className="reason-strip" aria-label="Motivos del potencial">
+        {potentialReasons.map((reason) => (
+          <span key={reason}>{reason}</span>
+        ))}
       </div>
 
       <div className="detail-actions">

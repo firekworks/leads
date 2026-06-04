@@ -2,24 +2,48 @@ import type { Lead } from "@/types/lead";
 
 const sectorPotential: Record<string, number> = {
   Restaurantes: 12,
+  Bares: 10,
+  Cafeterías: 9,
+  Panaderías: 8,
   Clínicas: 13,
+  Ópticas: 11,
+  Veterinarios: 11,
   Gimnasios: 11,
   Estética: 10,
   Peluquerías: 8,
   Academias: 10,
   Talleres: 8,
-  Inmobiliarias: 12
+  Inmobiliarias: 12,
+  Moda: 9,
+  Floristerías: 8,
+  Decoración: 9,
+  Muebles: 10,
+  Hoteles: 12,
+  "Turismo rural": 12,
+  Comercios: 8
 };
 
 const monthlyBaseBySector: Record<string, number> = {
   Restaurantes: 360,
+  Bares: 320,
+  Cafeterías: 300,
+  Panaderías: 260,
   Clínicas: 680,
+  Ópticas: 520,
+  Veterinarios: 520,
   Gimnasios: 520,
   Estética: 420,
   Peluquerías: 280,
   Academias: 450,
   Talleres: 360,
-  Inmobiliarias: 620
+  Inmobiliarias: 620,
+  Moda: 380,
+  Floristerías: 300,
+  Decoración: 420,
+  Muebles: 520,
+  Hoteles: 620,
+  "Turismo rural": 580,
+  Comercios: 320
 };
 
 export function computeScore(lead: Omit<Lead, "score"> | Lead) {
@@ -145,8 +169,39 @@ export function recommendServicePlan(lead: Lead) {
 }
 
 export function estimateAdBudget(lead: Lead) {
-  if (lead.score >= 80) return lead.sector === "Clínicas" || lead.sector === "Inmobiliarias" ? 500 : 350;
+  const premiumSector = ["Clínicas", "Inmobiliarias", "Hoteles", "Turismo rural"].includes(lead.sector);
+  if (lead.score >= 80) return premiumSector ? 500 : 350;
   if (lead.score >= 60) return 220;
   if (lead.score >= 40) return 120;
   return 80;
+}
+
+export function explainPotential(lead: Lead) {
+  const reasons: string[] = [];
+
+  if (lead.reviews >= 120 || lead.rating >= 4.5) {
+    reasons.push("Demanda local");
+  }
+
+  if (["Clínicas", "Inmobiliarias", "Hoteles", "Turismo rural", "Gimnasios", "Estética"].includes(lead.sector)) {
+    reasons.push("Ticket alto");
+  }
+
+  if (lead.contentUse === "Sin uso" || lead.contentUse === "Flojo" || lead.contentUse === "Pendiente") {
+    reasons.push("Hueco visual");
+  }
+
+  if (!lead.signals.instagram || !lead.signals.facebook || !lead.signals.web) {
+    reasons.push("Captación digital");
+  }
+
+  if (lead.phone || lead.whatsappUrl || lead.googleMapsUrl) {
+    reasons.push("Contacto fácil");
+  }
+
+  if (["Castalla", "Ibi", "Onil", "Biar", "Tibi"].includes(lead.city)) {
+    reasons.push("Ruta Foia");
+  }
+
+  return reasons.slice(0, 4);
 }
