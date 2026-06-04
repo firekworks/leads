@@ -23,11 +23,12 @@ export type FollowersBucket =
 
 export type ContentUse =
   | "Pendiente"
-  | "Sin redes"
-  | "Abandonado"
-  | "Básico"
+  | "Sin uso"
+  | "Flojo"
   | "Activo"
-  | "Fuerte";
+  | "Muy trabajado";
+
+export type LeadSource = "manual" | "google_places" | "importado" | "web";
 
 export type LeadSignals = {
   web: boolean;
@@ -59,6 +60,13 @@ export type Lead = {
   rating: number;
   reviews: number;
   googlePhotos: number;
+  placeId: string;
+  source: LeadSource;
+  isInvalid: boolean;
+  invalidReason: string;
+  lastSeenAt: string;
+  lastRefreshedAt: string;
+  reviewOwnerCandidates: string[];
   status: LeadStatus;
   priority: LeadPriority;
   potential: number;

@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { Lead } from "@/types/lead";
-import { scoreLabel, scoreTone } from "@/lib/scoring";
+import { estimateMonthlyValue, scoreLabel, scoreTone } from "@/lib/scoring";
 import { statusTone } from "@/lib/status";
 
 type LeadCardProps = {
@@ -13,6 +13,7 @@ type LeadCardProps = {
 
 export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
   const initial = lead.name.trim().slice(0, 1).toUpperCase() || "F";
+  const monthlyValue = estimateMonthlyValue(lead);
 
   return (
     <motion.button
@@ -20,8 +21,8 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
       className={active ? "lead-card lead-card--active" : "lead-card"}
       onClick={() => onSelect(lead)}
       layout
-      whileHover={{ y: -2 }}
-      transition={{ duration: 0.2 }}
+      whileHover={{ y: -1 }}
+      transition={{ duration: 0.18 }}
     >
       <span className="lead-avatar" aria-hidden="true">
         {lead.logoUrl ? (
@@ -35,28 +36,33 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
         ) : null}
         <span>{initial}</span>
       </span>
+
       <span className="lead-card__main">
         <span className="lead-card__title">
           <strong>{lead.name}</strong>
-          <span className={`score-pill score-pill--${scoreTone(lead.score)}`}>{lead.score}</span>
+          <span className={`status-pill status-pill--${statusTone(lead.status)}`}>{lead.status}</span>
         </span>
         <small>
-          {lead.sector} · {lead.city}
+          {lead.sector} · {lead.city} · {lead.reviews} reseñas
         </small>
-        <span>{lead.description || lead.pain}</span>
+        <span className="lead-card__description">{lead.nextAction || lead.description || lead.pain}</span>
         <span className="channel-badges">
-          {lead.signals.googleProfile ? <span className="channel-badge channel-badge--google">Google</span> : null}
-          {lead.signals.whatsapp ? <span className="channel-badge channel-badge--whatsapp">WhatsApp</span> : null}
-          {lead.signals.instagram ? <span className="channel-badge channel-badge--instagram">Instagram</span> : null}
-          {lead.signals.facebook ? <span className="channel-badge channel-badge--facebook">Facebook</span> : null}
+          {lead.signals.googleProfile ? <span className="channel-badge channel-badge--google">G</span> : null}
+          {lead.signals.whatsapp ? <span className="channel-badge channel-badge--whatsapp">W</span> : null}
+          {lead.signals.instagram ? <span className="channel-badge channel-badge--instagram">IG</span> : null}
+          {lead.signals.facebook ? <span className="channel-badge channel-badge--facebook">FB</span> : null}
           {lead.signals.web ? <span className="channel-badge channel-badge--web">Web</span> : null}
         </span>
       </span>
+
       <span className="lead-card__meta">
-        <small>{scoreLabel(lead.score)}</small>
-        <small className={`status-pill status-pill--${statusTone(lead.status)}`}>{lead.status}</small>
-        <small>IG {lead.followersBucket}</small>
-        <small>{lead.contentUse}</small>
+        <span className={`score-pill score-pill--${scoreTone(lead.score)}`}>
+          <strong>{lead.score}</strong>
+          <small>{scoreLabel(lead.score)}</small>
+        </span>
+        <span className="meta-chip">IG {lead.followersBucket}</span>
+        <span className="meta-chip meta-chip--content">{lead.contentUse}</span>
+        <span className="meta-chip">{monthlyValue ? `≈ ${monthlyValue}€/mes` : "Sin estimación"}</span>
       </span>
     </motion.button>
   );

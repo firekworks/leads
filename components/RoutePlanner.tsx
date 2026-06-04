@@ -2,13 +2,14 @@ import type { RouteStop } from "@/types/lead";
 
 type RoutePlannerProps = {
   stops: RouteStop[];
+  onSelect: (lead: RouteStop) => void;
 };
 
-export function RoutePlanner({ stops }: RoutePlannerProps) {
+export function RoutePlanner({ stops, onSelect }: RoutePlannerProps) {
   return (
     <div className="route-list">
       {stops.map((lead) => (
-        <article className="route-stop" key={lead.id}>
+        <button className="route-stop" key={lead.id} type="button" onClick={() => onSelect(lead)}>
           <span className="route-stop__order">{lead.visitOrder}</span>
           <div>
             <strong>{lead.name}</strong>
@@ -18,7 +19,7 @@ export function RoutePlanner({ stops }: RoutePlannerProps) {
             <p>{lead.routeReason}</p>
           </div>
           <span className="route-stop__score">{lead.score}</span>
-        </article>
+        </button>
       ))}
     </div>
   );
