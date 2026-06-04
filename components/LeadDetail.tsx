@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ContentUse, FollowersBucket, Lead, LeadStatus } from "@/types/lead";
 import { googleSearchUrls } from "@/lib/leads-repository";
-import { estimateMonthlyValue, scoreLabel } from "@/lib/scoring";
+import { estimateMonthlyValue, recommendServicePlan, scoreLabel } from "@/lib/scoring";
 import { statusTone } from "@/lib/status";
 import { ScoreRing } from "@/components/ScoreRing";
 
@@ -47,6 +47,7 @@ export function LeadDetail({
   const [draft, setDraft] = useState(lead);
   const searchUrls = useMemo(() => googleSearchUrls(draft), [draft]);
   const monthlyValue = estimateMonthlyValue(draft);
+  const plan = recommendServicePlan(draft);
 
   useEffect(() => {
     setDraft(lead);
@@ -76,13 +77,19 @@ export function LeadDetail({
           <strong>{monthlyValue ? `≈ ${monthlyValue}€/mes` : "Sin potencial activo"}</strong>
         </div>
         <div>
-          <span>Redes</span>
-          <strong>{draft.contentUse}</strong>
+          <span>Plan</span>
+          <strong>{plan.name}</strong>
         </div>
         <div>
-          <span>IG</span>
-          <strong>{draft.followersBucket}</strong>
+          <span>Ads</span>
+          <strong>≈ {plan.ads}€/mes</strong>
         </div>
+      </div>
+
+      <div className="plan-strip">
+        <span>{plan.visits}</span>
+        <span>{plan.content}</span>
+        <span>{draft.contentUse}</span>
       </div>
 
       <div className="detail-actions">

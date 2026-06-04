@@ -110,3 +110,43 @@ export function estimateMonthlyValue(lead: Lead) {
 
   return Math.round((base * scoreMultiplier * visualOpportunity * demandMultiplier) / 25) * 25;
 }
+
+export function recommendServicePlan(lead: Lead) {
+  const monthlyValue = estimateMonthlyValue(lead);
+  const adBudget = estimateAdBudget(lead);
+
+  if (monthlyValue >= 850 || lead.score >= 80) {
+    return {
+      name: "Dominio local",
+      visits: "2 visitas/mes",
+      content: "8-10 piezas",
+      ads: adBudget,
+      focus: "Meta Ads, reels, Google Business, WhatsApp y reseñas"
+    };
+  }
+
+  if (monthlyValue >= 450 || lead.score >= 60) {
+    return {
+      name: "Crecimiento",
+      visits: "1 visita/mes",
+      content: "4-6 piezas",
+      ads: adBudget,
+      focus: "Contenido profesional, campañas locales y captación por WhatsApp"
+    };
+  }
+
+  return {
+    name: "Arranque",
+    visits: "1 visita puntual",
+    content: "2-3 piezas",
+    ads: adBudget,
+    focus: "Google Business, WhatsApp y primera campaña local"
+  };
+}
+
+export function estimateAdBudget(lead: Lead) {
+  if (lead.score >= 80) return lead.sector === "Clínicas" || lead.sector === "Inmobiliarias" ? 500 : 350;
+  if (lead.score >= 60) return 220;
+  if (lead.score >= 40) return 120;
+  return 80;
+}

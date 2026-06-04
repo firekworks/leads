@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   }
 
   const places = await searchPlaces({ apiKey, query, city, pageSize });
-  const leads = places
+  const incomingLeads = places
     .filter((place) => isAllowedPlace(place, city))
     .map((place) => placeToLead(place, city, sector))
     .slice(0, pageSize);
@@ -79,13 +79,39 @@ export async function POST(request: Request) {
     return NextResponse.json({
       mode: "preview",
       requestsUsed: Math.min(maxRequests, 1),
-      leads
+      leads: incomingLeads
     });
   }
 
   const supabase = createAdminClient();
   if (!supabase) {
     return NextResponse.json({ error: "Faltan variables de Supabase en el servidor" }, { status: 503 });
+  }
+
+  const ids = incomingLeads.map((lead) => lead.id);
+  const { data: existingRows, error: existingError } = await supabase
+    .from("leads")
+    .select("*")
+    .in("id", ids);
+
+  if (existingError) {
+    return NextResponse.json({ error: existingError.message }, { status: 500 });
+  }
+
+  const existingById = new Map(
+    ((existingRows || []) as LeadRow[]).map((row) => [row.id, normalizeLeads([row])[0]])
+  );
+  const leads = incomingLeads
+    .map((lead) => mergeImportedLead(existingById.get(lead.id), lead))
+    .filter((lead) => !lead.isInvalid);
+
+  if (!leads.length) {
+    return NextResponse.json({
+      mode: "import",
+      requestsUsed: Math.min(maxRequests, 1),
+      imported: 0,
+      skippedInvalid: incomingLeads.length
+    });
   }
 
   const { error } = await supabase.from("leads").upsert(leads.map((lead) => toLeadRow(lead)));
@@ -218,6 +244,35 @@ function placeToLead(place: GooglePlace, city: string, sector: string): Lead {
     },
     createdAt: now,
     updatedAt: now
+  });
+}
+
+function mergeImportedLead(existing: Lead | undefined, incoming: Lead) {
+  if (!existing) return incoming;
+
+  return withScore({
+    ...incoming,
+    status: existing.status,
+    priority: existing.priority,
+    potential: existing.potential || incoming.potential,
+    lastContact: existing.lastContact,
+    nextAction: existing.nextAction || incoming.nextAction,
+    pain: existing.pain,
+    diagnosis: existing.diagnosis,
+    ownerName: existing.ownerName,
+    instagramUrl: existing.instagramUrl,
+    facebookUrl: existing.facebookUrl,
+    whatsappUrl: existing.whatsappUrl || incoming.whatsappUrl,
+    logoUrl: existing.logoUrl || incoming.logoUrl,
+    followersBucket: existing.followersBucket,
+    contentUse: existing.contentUse,
+    websiteTitle: existing.websiteTitle || incoming.websiteTitle,
+    description: existing.description || incoming.description,
+    isInvalid: existing.isInvalid,
+    invalidReason: existing.invalidReason,
+    reviewOwnerCandidates: existing.reviewOwnerCandidates,
+    createdAt: existing.createdAt,
+    updatedAt: new Date().toISOString()
   });
 }
 

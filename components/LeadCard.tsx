@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { Lead } from "@/types/lead";
-import { estimateMonthlyValue, scoreLabel, scoreTone } from "@/lib/scoring";
+import { estimateMonthlyValue, recommendServicePlan, scoreLabel, scoreTone } from "@/lib/scoring";
 import { statusTone } from "@/lib/status";
 
 type LeadCardProps = {
@@ -14,6 +14,7 @@ type LeadCardProps = {
 export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
   const initial = lead.name.trim().slice(0, 1).toUpperCase() || "F";
   const monthlyValue = estimateMonthlyValue(lead);
+  const plan = recommendServicePlan(lead);
 
   return (
     <motion.button
@@ -62,7 +63,7 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
         </span>
         <span className="meta-chip">IG {lead.followersBucket}</span>
         <span className="meta-chip meta-chip--content">{lead.contentUse}</span>
-        <span className="meta-chip">{monthlyValue ? `≈ ${monthlyValue}€/mes` : "Sin estimación"}</span>
+        <span className="meta-chip">{monthlyValue ? `${plan.name} · ≈ ${monthlyValue}€/mes` : "Sin estimación"}</span>
       </span>
     </motion.button>
   );
