@@ -16,7 +16,7 @@ import {
   persistLead,
   type LeadsSource
 } from "@/lib/leads-repository";
-import { estimateMonthlyValue } from "@/lib/scoring";
+import { estimateWeightedMonthlyValue } from "@/lib/scoring";
 import { leads as seedLeads, statuses } from "@/lib/mock-leads";
 import type { ContentUse, FollowersBucket, Lead, LeadStatus, RouteStop } from "@/types/lead";
 
@@ -322,7 +322,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const openPipeline = leadItems.filter(
     (lead) => !lead.isInvalid && !["Cliente", "Descartado", "Desinteresado"].includes(lead.status)
   ).length;
-  const monthlyEstimate = leadItems.reduce((total, lead) => total + estimateMonthlyValue(lead), 0);
+  const monthlyEstimate = leadItems.reduce((total, lead) => total + estimateWeightedMonthlyValue(lead), 0);
   const missingInstagram = leadItems.filter((lead) => !lead.instagramUrl && !lead.isInvalid).length;
 
   return (
@@ -361,7 +361,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
             <strong>{missingInstagram}</strong>
           </article>
           <article>
-            <span>Estimación mensual</span>
+            <span>Previsión mensual</span>
             <strong>≈ {monthlyEstimate}€</strong>
           </article>
         </section>

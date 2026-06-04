@@ -149,6 +149,24 @@ export function estimateMonthlyValue(lead: Lead) {
   return Math.round((base * scoreMultiplier * visualOpportunity * demandMultiplier) / 25) * 25;
 }
 
+export function estimateWeightedMonthlyValue(lead: Lead) {
+  const monthlyValue = estimateMonthlyValue(lead);
+  if (!monthlyValue) return 0;
+
+  const scoreProbability =
+    lead.score >= 80 ? 0.18 : lead.score >= 60 ? 0.08 : lead.score >= 40 ? 0.035 : 0.012;
+  const stageMultiplier: Record<string, number> = {
+    Detectado: 0.65,
+    Validado: 0.9,
+    Interesado: 1.15,
+    "Visita/Reunión": 1.35,
+    Negociación: 1.7
+  };
+  const probability = scoreProbability * (stageMultiplier[lead.status] || 1);
+
+  return Math.round((monthlyValue * probability) / 25) * 25;
+}
+
 export function recommendServicePlan(lead: Lead) {
   const monthlyValue = estimateMonthlyValue(lead);
   const adBudget = estimateAdBudget(lead);
