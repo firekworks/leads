@@ -71,6 +71,7 @@ type PlacesImportRequest = {
   allowPaidRequests?: boolean;
   maxRequests?: number;
   pageSize?: number;
+  returnLeads?: boolean;
 };
 
 type GooglePlace = {
@@ -185,6 +186,16 @@ export async function POST(request: Request) {
   const { error } = await supabase.from("leads").upsert(leads.map((lead) => toLeadRow(lead)));
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (body.returnLeads === false) {
+    return NextResponse.json({
+      ok: true,
+      mode: "import",
+      requestsUsed,
+      imported: leads.length,
+      uniqueCandidates: uniquePlaces.length
+    });
   }
 
   const { data, error: readError } = await supabase
