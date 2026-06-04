@@ -399,9 +399,9 @@ function mergeImportedLead(existing: Lead | undefined, incoming: Lead) {
 
 function inferSector(querySector: string, types: string[]) {
   const normalized = querySector.toLowerCase();
-  if (normalized.includes("clín") || types.includes("dentist") || types.includes("doctor")) return "Clínicas";
   if (normalized.includes("fisio") || types.includes("physiotherapist")) return "Fisioterapia";
   if (normalized.includes("farmacia") || types.includes("pharmacy")) return "Farmacias";
+  if (normalized.includes("clín") || types.includes("dentist") || types.includes("doctor")) return "Clínicas";
   if (normalized.includes("óptic") || types.includes("optician")) return "Ópticas";
   if (normalized.includes("veterin") || types.includes("veterinary_care")) return "Veterinarios";
   if (normalized.includes("gim") || types.includes("gym")) return "Gimnasios";
