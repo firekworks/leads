@@ -41,13 +41,8 @@ export function AppShell({ children, currentView }: AppShellProps) {
         </nav>
 
         <div className="sidebar__note">
-          <span>Hoy</span>
-          <strong>Prioriza visitas con movimiento real y hueco digital claro.</strong>
-          <form action="/auth/signout" method="post">
-            <button className="sidebar__logout" type="submit">
-              Salir
-            </button>
-          </form>
+          <span>Foco</span>
+          <strong>La Foia: Castalla, Ibi, Onil, Biar y Tibi. Sin Alcoy ni Alicante.</strong>
         </div>
       </aside>
 

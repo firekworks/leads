@@ -11,6 +11,17 @@ const sectorPotential: Record<string, number> = {
   Inmobiliarias: 12
 };
 
+const monthlyBaseBySector: Record<string, number> = {
+  Restaurantes: 360,
+  Clínicas: 680,
+  Gimnasios: 520,
+  Estética: 420,
+  Peluquerías: 280,
+  Academias: 450,
+  Talleres: 360,
+  Inmobiliarias: 620
+};
+
 export function computeScore(lead: Omit<Lead, "score"> | Lead) {
   const commercialPotential = Math.min(
     30,
@@ -27,15 +38,13 @@ export function computeScore(lead: Omit<Lead, "score"> | Lead) {
   );
 
   const contentGap =
-    lead.contentUse === "Sin redes"
+    lead.contentUse === "Sin uso"
       ? 6
-      : lead.contentUse === "Abandonado"
+      : lead.contentUse === "Flojo"
         ? 5
-        : lead.contentUse === "Básico"
-          ? 4
-          : lead.contentUse === "Pendiente"
-            ? 3
-            : 0;
+        : lead.contentUse === "Pendiente"
+          ? 3
+          : 0;
 
   const digitalGap = Math.min(
     20,
@@ -56,7 +65,7 @@ export function computeScore(lead: Omit<Lead, "score"> | Lead) {
       (lead.address ? 2 : 0)
   );
 
-  const nearbyCities = ["Castalla", "Onil", "Ibi", "Elda", "Sax", "Petrer", "Alcoi"];
+  const nearbyCities = ["Castalla", "Onil", "Ibi", "Biar", "Tibi"];
   const inRoute = nearbyCities.includes(lead.city) ? 6 : 3;
   const presencialOpportunity = Math.min(10, inRoute + (lead.address ? 2 : 0) + (lead.rating >= 4.5 ? 2 : 0));
 
@@ -78,4 +87,26 @@ export function scoreTone(score: number) {
   if (score >= 60) return "warm";
   if (score >= 40) return "medium";
   return "low";
+}
+
+export function estimateMonthlyValue(lead: Lead) {
+  if (["Cliente", "Descartado", "Desinteresado"].includes(lead.status) || lead.isInvalid) {
+    return 0;
+  }
+
+  const base = monthlyBaseBySector[lead.sector] || 340;
+  const scoreMultiplier = lead.score >= 80 ? 1.25 : lead.score >= 60 ? 0.85 : lead.score >= 40 ? 0.45 : 0.18;
+  const visualOpportunity =
+    lead.contentUse === "Sin uso"
+      ? 1.14
+      : lead.contentUse === "Flojo"
+        ? 1.08
+        : lead.contentUse === "Pendiente"
+          ? 1.02
+          : lead.contentUse === "Muy trabajado"
+            ? 0.78
+            : 0.9;
+  const demandMultiplier = lead.reviews >= 150 ? 1.12 : lead.reviews >= 50 ? 1 : 0.82;
+
+  return Math.round((base * scoreMultiplier * visualOpportunity * demandMultiplier) / 25) * 25;
 }

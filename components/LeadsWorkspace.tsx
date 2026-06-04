@@ -16,8 +16,9 @@ import {
   persistLead,
   type LeadsSource
 } from "@/lib/leads-repository";
+import { estimateMonthlyValue } from "@/lib/scoring";
 import { leads as seedLeads, statuses } from "@/lib/mock-leads";
-import type { ContentUse, FollowersBucket, Lead, RouteStop } from "@/types/lead";
+import type { ContentUse, FollowersBucket, Lead, LeadStatus, RouteStop } from "@/types/lead";
 
 type LeadsWorkspaceProps = {
   initialView: "radar" | "pipeline" | "ruta";
@@ -33,11 +34,10 @@ const followersBuckets: FollowersBucket[] = [
 
 const contentUses: ContentUse[] = [
   "Pendiente",
-  "Sin redes",
-  "Abandonado",
-  "Básico",
+  "Sin uso",
+  "Flojo",
   "Activo",
-  "Fuerte"
+  "Muy trabajado"
 ];
 
 type EnrichResponse = Partial<
@@ -65,6 +65,9 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const [dataSource, setDataSource] = useState<LeadsSource>("localStorage");
   const [syncMessage, setSyncMessage] = useState("Cargando datos");
   const [enrichingId, setEnrichingId] = useState("");
+  const [findingOwnerId, setFindingOwnerId] = useState("");
+  const [importingPlaces, setImportingPlaces] = useState(false);
+  const [placesMessage, setPlacesMessage] = useState("Foia preparada: Castalla, Ibi, Onil, Biar y Tibi");
 
   useEffect(() => {
     let active = true;
@@ -122,6 +125,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         (!withoutInstagram || !lead.instagramUrl) &&
         (!withoutFacebook || !lead.facebookUrl) &&
         (!withoutWeb || !lead.website) &&
+        (!lead.isInvalid || status === "Descartado") &&
         (!minScore || lead.score >= minScore)
       );
     });
@@ -145,7 +149,12 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const routeStops = useMemo<RouteStop[]>(
     () =>
       leadItems
-        .filter((lead) => !["Cliente", "Descartado", "Desinteresado"].includes(lead.status))
+        .filter(
+          (lead) =>
+            !lead.isInvalid &&
+            !["Cliente", "Descartado", "Desinteresado"].includes(lead.status) &&
+            ["Castalla", "Ibi", "Onil", "Biar", "Tibi"].includes(lead.city)
+        )
         .slice()
         .sort((a, b) => b.score - a.score)
         .map((lead, index) => ({
@@ -169,6 +178,10 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     setDataSource(result.source);
     setSyncMessage(result.source === "supabase" ? "Guardado en Supabase" : "Guardado en localStorage");
     setSelectedId(result.lead.id);
+  }
+
+  async function handleStatusChange(lead: Lead, nextStatus: LeadStatus) {
+    await handleSaveLead({ ...lead, status: nextStatus, updatedAt: new Date().toISOString() });
   }
 
   async function handleNewLead() {
@@ -198,7 +211,8 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         facebookUrl: enriched.facebookUrl || lead.facebookUrl,
         whatsappUrl: enriched.whatsappUrl || lead.whatsappUrl,
         logoUrl: enriched.logoUrl || lead.logoUrl,
-        websiteTitle: enriched.websiteTitle || lead.websiteTitle
+        websiteTitle: enriched.websiteTitle || lead.websiteTitle,
+        lastRefreshedAt: new Date().toISOString()
       };
 
       await handleSaveLead(nextLead);
@@ -210,11 +224,86 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     }
   }
 
+  async function handleFindOwner(lead: Lead) {
+    if (!lead.placeId) return;
+    setFindingOwnerId(lead.id);
+
+    try {
+      const response = await fetch("/api/places/owner", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ placeId: lead.placeId, allowPaidRequests: true })
+      });
+      const payload = (await response.json()) as { candidates?: string[]; error?: string };
+
+      if (!response.ok) throw new Error(payload.error || "No se pudieron revisar reseñas");
+
+      const candidates = payload.candidates || [];
+      const nextLead = {
+        ...lead,
+        ownerName: lead.ownerName || candidates[0] || "",
+        reviewOwnerCandidates: candidates,
+        lastRefreshedAt: new Date().toISOString()
+      };
+      await handleSaveLead(nextLead);
+      setSyncMessage(candidates.length ? "Candidatos de dueño guardados" : "Sin dueño claro en reseñas");
+    } catch (error) {
+      setSyncMessage(error instanceof Error ? error.message : "No se pudieron revisar reseñas");
+    } finally {
+      setFindingOwnerId("");
+    }
+  }
+
+  async function handlePlacesImport(mode: "preview" | "import") {
+    setImportingPlaces(true);
+
+    try {
+      const response = await fetch("/api/places/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          city: city || "Castalla",
+          sector: sector || "Restaurantes",
+          mode,
+          allowPaidRequests: mode === "import",
+          maxRequests: 1,
+          pageSize: 10
+        })
+      });
+      const payload = (await response.json()) as {
+        mode?: string;
+        imported?: number;
+        leads?: Lead[];
+        message?: string;
+        error?: string;
+      };
+
+      if (!response.ok) throw new Error(payload.error || "No se pudo preparar la importación");
+
+      if (payload.leads?.length) {
+        setLeadItems(payload.leads);
+        setSelectedId((current) => current || payload.leads?.[0]?.id || "");
+        setDataSource("supabase");
+      }
+
+      setPlacesMessage(
+        payload.imported
+          ? `${payload.imported} comercios importados con 1 petición Places`
+          : payload.message || "Plan de importación listo sin consumir Places"
+      );
+    } catch (error) {
+      setPlacesMessage(error instanceof Error ? error.message : "No se pudo preparar la importación");
+    } finally {
+      setImportingPlaces(false);
+    }
+  }
+
   const hotLeads = leadItems.filter((lead) => lead.score >= 80).length;
   const openPipeline = leadItems.filter(
-    (lead) => !["Cliente", "Descartado", "Desinteresado"].includes(lead.status)
+    (lead) => !lead.isInvalid && !["Cliente", "Descartado", "Desinteresado"].includes(lead.status)
   ).length;
-  const routePotential = routeStops.reduce((total, lead) => total + lead.potential, 0);
+  const monthlyEstimate = leadItems.reduce((total, lead) => total + estimateMonthlyValue(lead), 0);
+  const missingInstagram = leadItems.filter((lead) => !lead.instagramUrl && !lead.isInvalid).length;
 
   return (
     <main className="app">
@@ -223,7 +312,8 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         <header className="workspace-header">
           <div>
             <p className="eyebrow">Radar comercial Firekworks</p>
-            <h1>{initialView === "radar" ? "Oportunidades locales" : viewTitle(initialView)}</h1>
+            <h1>{initialView === "radar" ? "Radar de comercios" : viewTitle(initialView)}</h1>
+            <p className="workspace-subtitle">Prioridad, temperatura, hueco visual y siguiente acción en una sola vista.</p>
           </div>
           <div className="header-actions">
             <span className={`source-pill source-pill--${dataSource}`}>{syncMessage}</span>
@@ -247,8 +337,12 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
             <strong>{hotLeads}</strong>
           </article>
           <article>
-            <span>Potencial ruta</span>
-            <strong>{routePotential}€</strong>
+            <span>Sin Instagram</span>
+            <strong>{missingInstagram}</strong>
+          </article>
+          <article>
+            <span>Estimación mensual</span>
+            <strong>≈ {monthlyEstimate}€</strong>
           </article>
         </section>
 
@@ -291,6 +385,29 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   onMinScore={setMinScore}
                 />
 
+                <div className="import-strip">
+                  <div>
+                    <strong>Importación Foia</strong>
+                    <span>{placesMessage}</span>
+                  </div>
+                  <button
+                    className="button button--ghost"
+                    type="button"
+                    onClick={() => handlePlacesImport("preview")}
+                    disabled={importingPlaces}
+                  >
+                    Plan sin coste
+                  </button>
+                  <button
+                    className="button button--quiet"
+                    type="button"
+                    onClick={() => handlePlacesImport("import")}
+                    disabled={importingPlaces}
+                  >
+                    Importar 1 búsqueda
+                  </button>
+                </div>
+
                 <div className="lead-list">
                   {filteredLeads.length ? (
                     filteredLeads.map((lead) => (
@@ -316,7 +433,9 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   statuses={statuses}
                   onSave={handleSaveLead}
                   onEnrich={handleEnrich}
+                  onFindOwner={handleFindOwner}
                   enriching={enrichingId === selectedLead.id}
+                  findingOwner={findingOwnerId === selectedLead.id}
                 />
               ) : null}
             </motion.section>
@@ -335,7 +454,26 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                 <span>Estados comerciales</span>
                 <p>De descartado a cliente, con señales sociales y siguiente movimiento.</p>
               </div>
-              <PipelineBoard leads={leadItems} statuses={statuses} />
+              <div className="pipeline-layout">
+                <PipelineBoard
+                  leads={leadItems}
+                  statuses={statuses}
+                  selectedId={selectedLead?.id || ""}
+                  onSelect={handleSelect}
+                  onStatusChange={handleStatusChange}
+                />
+                {selectedLead ? (
+                  <LeadDetail
+                    lead={selectedLead}
+                    statuses={statuses}
+                    onSave={handleSaveLead}
+                    onEnrich={handleEnrich}
+                    onFindOwner={handleFindOwner}
+                    enriching={enrichingId === selectedLead.id}
+                    findingOwner={findingOwnerId === selectedLead.id}
+                  />
+                ) : null}
+              </div>
             </motion.section>
           ) : null}
 
@@ -352,7 +490,20 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                 <span>Ruta presencial</span>
                 <p>Orden pensado para salir por Castalla, Ibi y Onil con foco.</p>
               </div>
-              <RoutePlanner stops={routeStops} />
+              <div className="route-layout">
+                <RoutePlanner stops={routeStops} onSelect={handleSelect} />
+                {selectedLead ? (
+                  <LeadDetail
+                    lead={selectedLead}
+                    statuses={statuses}
+                    onSave={handleSaveLead}
+                    onEnrich={handleEnrich}
+                    onFindOwner={handleFindOwner}
+                    enriching={enrichingId === selectedLead.id}
+                    findingOwner={findingOwnerId === selectedLead.id}
+                  />
+                ) : null}
+              </div>
             </motion.section>
           ) : null}
         </AnimatePresence>
