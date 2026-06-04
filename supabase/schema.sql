@@ -1,47 +1,67 @@
--- Firekworks Leads V3 - esquema base para Supabase
--- Ejecutar en Supabase SQL Editor cuando queráis pasar de localStorage a base de datos real.
-
-create table if not exists leads (
+create table if not exists public.leads (
   id text primary key,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name text not null,
   sector text not null,
   city text not null,
   address text default '',
   phone text default '',
   website text default '',
+  description text default '',
+  owner_name text default '',
+  instagram_url text default '',
+  facebook_url text default '',
+  whatsapp_url text default '',
+  logo_url text default '',
+  followers_bucket text not null default 'Pendiente'
+    check (followers_bucket in ('Pendiente', 'Sin cuenta', '< 1.000', '1.000 - 5.000', '+5.000')),
+  content_use text not null default 'Pendiente'
+    check (content_use in ('Pendiente', 'Sin redes', 'Abandonado', 'Básico', 'Activo', 'Fuerte')),
+  website_title text default '',
   google_maps_url text default '',
-  google_place_id text,
   rating numeric default 0,
   reviews integer default 0,
-  photos integer default 0,
-  channels jsonb not null default '{"google":"weak","whatsapp":"none","instagram":"none","facebook":"none","website":"none"}',
-  status text not null default 'Detectado',
-  temperature text not null default 'Frío',
-  score integer not null default 0,
-  monthly_potential integer default 490,
+  google_photos integer default 0,
+  status text not null default 'Detectado'
+    check (status in ('Descartado', 'Detectado', 'Validado', 'Interesado', 'Visita/Reunión', 'Negociación', 'Cliente', 'Desinteresado')),
+  priority text not null default 'Media',
+  potential integer default 0,
+  last_contact text default 'Sin contacto',
+  next_action text default '',
   pain text default '',
   diagnosis text default '',
-  recommended_action text default '',
-  next_action text default '',
-  next_action_date date,
-  notes text default '',
-  last_contact date,
-  last_checked date,
-  source text default 'manual',
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  score integer default 0,
+  signals jsonb not null default '{"web": false, "instagram": false, "facebook": false, "whatsapp": false, "photos": false, "googleProfile": false}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
-create table if not exists lead_timeline (
-  id uuid primary key default gen_random_uuid(),
-  lead_id text references leads(id) on delete cascade,
-  event_type text not null,
-  title text not null,
-  description text default '',
-  created_at timestamptz default now()
-);
+alter table public.leads enable row level security;
 
-create index if not exists leads_city_idx on leads(city);
-create index if not exists leads_sector_idx on leads(sector);
-create index if not exists leads_status_idx on leads(status);
-create index if not exists leads_score_idx on leads(score desc);
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.leads to authenticated;
+
+drop policy if exists "leads_select_own" on public.leads;
+create policy "leads_select_own"
+  on public.leads for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "leads_insert_own" on public.leads;
+create policy "leads_insert_own"
+  on public.leads for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "leads_update_own" on public.leads;
+create policy "leads_update_own"
+  on public.leads for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "leads_delete_own" on public.leads;
+create policy "leads_delete_own"
+  on public.leads for delete
+  to authenticated
+  using (auth.uid() = user_id);

@@ -1,5 +1,5 @@
-import FirekworksLeads from "@/components/FirekworksLeads";
+import { LeadsWorkspace } from "@/components/LeadsWorkspace";
 
-export default function Page() {
-  return <FirekworksLeads />;
+export default function RadarPage() {
+  return <LeadsWorkspace initialView="radar" />;
 }

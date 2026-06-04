@@ -1,95 +1,78 @@
-export type City = "Castalla" | "Ibi" | "Onil" | "Tibi" | "Sax" | "Petrer" | "Villena" | "Biar" | string;
-export type Sector =
-  | "Restaurante"
-  | "Bar / cafetería"
-  | "Clínica"
-  | "Dentista"
-  | "Estética"
-  | "Peluquería"
-  | "Gimnasio"
-  | "Academia"
-  | "Taller"
-  | "Inmobiliaria"
-  | "Comercio"
-  | string;
-
 export type LeadStatus =
+  | "Descartado"
   | "Detectado"
   | "Validado"
-  | "Prioritario"
-  | "Visita pendiente"
-  | "Visitado"
   | "Interesado"
-  | "Diagnóstico enviado"
-  | "Propuesta enviada"
+  | "Visita/Reunión"
   | "Negociación"
   | "Cliente"
-  | "No encaja"
-  | "Perdido";
+  | "Desinteresado";
 
-export type Temperature = "Frío" | "Templado" | "Caliente" | "Muy caliente";
-export type Channel = "google" | "whatsapp" | "instagram" | "facebook" | "website";
-export type ChannelHealth = "none" | "weak" | "ok" | "strong";
+export type LeadPriority = "Muy alta" | "Alta" | "Media" | "Baja";
 
-export interface ChannelState {
-  google: ChannelHealth;
-  whatsapp: ChannelHealth;
-  instagram: ChannelHealth;
-  facebook: ChannelHealth;
-  website: ChannelHealth;
-}
+export type LeadSector = string;
 
-export interface Lead {
+export type LeadCity = string;
+
+export type FollowersBucket =
+  | "Pendiente"
+  | "Sin cuenta"
+  | "< 1.000"
+  | "1.000 - 5.000"
+  | "+5.000";
+
+export type ContentUse =
+  | "Pendiente"
+  | "Sin redes"
+  | "Abandonado"
+  | "Básico"
+  | "Activo"
+  | "Fuerte";
+
+export type LeadSignals = {
+  web: boolean;
+  instagram: boolean;
+  facebook: boolean;
+  whatsapp: boolean;
+  photos: boolean;
+  googleProfile: boolean;
+};
+
+export type Lead = {
   id: string;
   name: string;
-  sector: Sector;
-  city: City;
+  sector: LeadSector;
+  city: LeadCity;
   address: string;
   phone: string;
   website: string;
+  description: string;
+  ownerName: string;
+  instagramUrl: string;
+  facebookUrl: string;
+  whatsappUrl: string;
+  logoUrl: string;
+  followersBucket: FollowersBucket;
+  contentUse: ContentUse;
+  websiteTitle: string;
   googleMapsUrl: string;
-  googlePlaceId?: string;
   rating: number;
   reviews: number;
-  photos: number;
-  channels: ChannelState;
+  googlePhotos: number;
   status: LeadStatus;
-  temperature: Temperature;
-  score: number;
-  monthlyPotential: number;
+  priority: LeadPriority;
+  potential: number;
+  lastContact: string;
+  nextAction: string;
   pain: string;
   diagnosis: string;
-  recommendedAction: string;
-  nextAction: string;
-  nextActionDate: string;
-  notes: string;
-  lastContact: string;
-  lastChecked: string;
-  source: "demo" | "manual" | "google";
+  score: number;
+  signals: LeadSignals;
   createdAt: string;
   updatedAt: string;
-}
+};
 
-export interface Filters {
-  query: string;
-  city: string;
-  sector: string;
-  status: string;
-  temperature: string;
-  minScore: number;
-  channelIssue: string;
-}
-
-export interface PlaceImportResult {
-  googlePlaceId: string;
-  name: string;
-  sector: string;
-  city: string;
-  address: string;
-  phone: string;
-  website: string;
-  googleMapsUrl: string;
-  rating: number;
-  reviews: number;
-  photos: number;
-}
+export type RouteStop = Lead & {
+  visitOrder: number;
+  routeReason: string;
+};

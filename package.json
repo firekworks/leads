@@ -1,6 +1,6 @@
 {
-  "name": "firekworks-leads-v3",
-  "version": "3.0.0",
+  "name": "firekworks-leads",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,14 +9,23 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "16.2.7",
-    "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "@supabase/ssr": "latest",
+    "@supabase/supabase-js": "latest",
+    "framer-motion": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
   },
   "devDependencies": {
-    "@types/node": "24.10.1",
-    "@types/react": "19.2.7",
-    "@types/react-dom": "19.2.3",
-    "typescript": "5.9.3"
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@tailwindcss/postcss": "latest",
+    "autoprefixer": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "postcss": "latest",
+    "tailwindcss": "latest",
+    "typescript": "latest"
   }
 }
