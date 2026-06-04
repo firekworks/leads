@@ -6,7 +6,34 @@ import type { Lead, LeadSector } from "@/types/lead";
 export const dynamic = "force-dynamic";
 
 const FOIA_CITIES = ["Castalla", "Ibi", "Onil", "Biar", "Tibi"];
-const EXCLUDED_TERMS = ["alcoy", "alcoi", "alicante", "alacant"];
+const EXCLUDED_TERMS = ["alcoy", "alcoi"];
+type CityViewport = {
+  low: { latitude: number; longitude: number };
+  high: { latitude: number; longitude: number };
+};
+
+const CITY_VIEWPORTS: Record<string, CityViewport> = {
+  Castalla: {
+    low: { latitude: 38.54, longitude: -0.72 },
+    high: { latitude: 38.64, longitude: -0.61 }
+  },
+  Ibi: {
+    low: { latitude: 38.58, longitude: -0.62 },
+    high: { latitude: 38.66, longitude: -0.52 }
+  },
+  Onil: {
+    low: { latitude: 38.59, longitude: -0.71 },
+    high: { latitude: 38.66, longitude: -0.61 }
+  },
+  Biar: {
+    low: { latitude: 38.59, longitude: -0.83 },
+    high: { latitude: 38.68, longitude: -0.72 }
+  },
+  Tibi: {
+    low: { latitude: 38.48, longitude: -0.63 },
+    high: { latitude: 38.57, longitude: -0.53 }
+  }
+};
 const DEFAULT_TYPES: LeadSector[] = [
   "Restaurantes",
   "Clínicas",
@@ -231,6 +258,9 @@ async function searchPlacesPage({
       textQuery: `${query}, ${city}, Alicante, España`,
       pageSize,
       ...(pageToken ? { pageToken } : {}),
+      locationRestriction: {
+        rectangle: CITY_VIEWPORTS[city]
+      },
       languageCode: "es",
       regionCode: "ES"
     }),
