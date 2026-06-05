@@ -173,3 +173,6 @@ create index if not exists leads_enrichment_status_idx on public.leads(enrichmen
 create index if not exists leads_city_active_score_idx
   on public.leads(city, score_total desc)
   where coalesce(is_disqualified, false) = false;
+
+revoke execute on function public.audit_important_lead_changes() from anon, authenticated, public;
+revoke execute on function public.sync_lead_cleanup_fields() from anon, authenticated, public;
