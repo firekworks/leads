@@ -76,7 +76,7 @@ const baseLeads: Omit<Lead, "score">[] = [
     lastSeenAt: "2026-06-02T09:00:00Z",
     lastRefreshedAt: "2026-06-02T09:00:00Z",
     reviewOwnerCandidates: [],
-    status: "Interesado",
+    status: "Respondió",
     priority: "Muy alta",
     potential: 950,
     lastContact: "Hace 2 días",
@@ -122,7 +122,7 @@ const baseLeads: Omit<Lead, "score">[] = [
     lastSeenAt: "2026-06-02T15:00:00Z",
     lastRefreshedAt: "2026-06-02T15:00:00Z",
     reviewOwnerCandidates: [],
-    status: "Visita/Reunión",
+    status: "Reunión agendada",
     priority: "Alta",
     potential: 790,
     lastContact: "Ayer",
@@ -144,8 +144,8 @@ const baseLeads: Omit<Lead, "score">[] = [
     id: "estetica-aura",
     name: "Estetica Aura",
     sector: "Estética",
-    city: "Elda",
-    address: "Calle Jardines, 14",
+    city: "Biar",
+    address: "Calle Mayor, 14",
     phone: "965 000 404",
     website: "",
     description: "Centro de estética con buena imagen social y poca captación desde búsqueda local.",
@@ -190,8 +190,8 @@ const baseLeads: Omit<Lead, "score">[] = [
     id: "auto-taller-rico",
     name: "Auto Taller Rico",
     sector: "Talleres",
-    city: "Petrer",
-    address: "Poligono Salinetas, 9",
+    city: "Tibi",
+    address: "Poligono Industrial, 9",
     phone: "965 000 505",
     website: "",
     description: "Taller con reseñas suficientes y comunicación digital mejorable.",
@@ -299,26 +299,28 @@ export const cities: LeadCity[] = [
   "Castalla",
   "Onil",
   "Ibi",
-  "Elda",
-  "Sax",
-  "Petrer",
   "Biar",
   "Tibi"
 ];
 
 export const statuses: LeadStatus[] = [
-  "Descartado",
   "Detectado",
   "Validado",
-  "Interesado",
-  "Visita/Reunión",
+  "Prioritario",
+  "Contactado",
+  "Respondió",
+  "Reunión agendada",
+  "Diagnóstico hecho",
+  "Propuesta enviada",
   "Negociación",
-  "Cliente",
-  "Desinteresado"
+  "Ganado",
+  "Perdido",
+  "No encaja",
+  "No contactar"
 ];
 
 export const routeStops: RouteStop[] = leads
-  .filter((lead) => !["Cliente", "Descartado", "Desinteresado"].includes(lead.status))
+  .filter((lead) => !["Ganado", "Perdido", "No encaja", "No contactar"].includes(lead.status))
   .slice()
   .sort((a, b) => b.score - a.score)
   .map((lead, index) => ({

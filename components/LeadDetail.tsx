@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ContentUse, FollowersBucket, Lead, LeadStatus } from "@/types/lead";
+import type { ContentUse, FollowersBucket, Lead, LeadActivity, LeadNote, LeadStatus, LeadTask } from "@/types/lead";
 import { googleSearchUrls } from "@/lib/leads-repository";
 import { estimateMonthlyValue, explainPotential, recommendServicePlan, scoreLabel } from "@/lib/scoring";
 import { statusTone } from "@/lib/status";
@@ -13,6 +13,11 @@ type LeadDetailProps = {
   onSave: (lead: Lead) => void;
   onEnrich: (lead: Lead) => void;
   onFindOwner: (lead: Lead) => void;
+  onAddActivity: (lead: Lead, activity: { type: string; result: string; nextAction: string; reminderAt: string }) => void;
+  onConvert: (lead: Lead) => void;
+  activities: LeadActivity[];
+  tasks: LeadTask[];
+  notes: LeadNote[];
   enriching: boolean;
   findingOwner: boolean;
 };
@@ -41,10 +46,19 @@ export function LeadDetail({
   onSave,
   onEnrich,
   onFindOwner,
+  onAddActivity,
+  onConvert,
+  activities,
+  tasks,
+  notes,
   enriching,
   findingOwner
 }: LeadDetailProps) {
   const [draft, setDraft] = useState(lead);
+  const [activityResult, setActivityResult] = useState("");
+  const [activityType, setActivityType] = useState("WhatsApp");
+  const [activityNext, setActivityNext] = useState("");
+  const [activityReminder, setActivityReminder] = useState("");
   const searchUrls = useMemo(() => googleSearchUrls(draft), [draft]);
   const monthlyValue = estimateMonthlyValue(draft);
   const plan = recommendServicePlan(draft);
@@ -106,6 +120,9 @@ export function LeadDetail({
         <button className="button button--ghost" type="button" onClick={() => onEnrich(draft)} disabled={enriching}>
           {enriching ? "Enriqueciendo" : "Enriquecer web"}
         </button>
+        <button className="button button--dark" type="button" onClick={() => onConvert(draft)}>
+          Convertir en cliente
+        </button>
       </div>
 
       <div className="quick-actions">
@@ -153,6 +170,11 @@ export function LeadDetail({
             </select>
           </label>
           <NumberField label="Potencial base" value={draft.potential} onChange={(value) => update("potential", value)} />
+          <DateField
+            label="Próximo seguimiento"
+            value={draft.nextFollowUpAt?.slice(0, 16) || ""}
+            onChange={(value) => update("nextFollowUpAt", value)}
+          />
           <TextArea label="Próximo paso" value={draft.nextAction} onChange={(value) => update("nextAction", value)} />
         </section>
 
@@ -200,7 +222,94 @@ export function LeadDetail({
         </section>
 
         <section className="detail-section">
-          <h3>Google y diagnóstico</h3>
+          <h3>Diagnóstico Firekworks</h3>
+          <TextArea label="Problema detectado" value={draft.problemDetected || ""} onChange={(value) => update("problemDetected", value)} />
+          <TextArea label="Oportunidad detectada" value={draft.opportunityDetected || ""} onChange={(value) => update("opportunityDetected", value)} />
+          <Field label="Servicio recomendado" value={draft.recommendedService || ""} onChange={(value) => update("recommendedService", value)} />
+          <Field label="Oferta recomendada" value={draft.recommendedOffer || ""} onChange={(value) => update("recommendedOffer", value)} />
+          <TextArea label="Gancho de venta" value={draft.salesHook || ""} onChange={(value) => update("salesHook", value)} />
+          <TextArea label="Objeción probable" value={draft.probableObjection || ""} onChange={(value) => update("probableObjection", value)} />
+          <TextArea label="WhatsApp sugerido" value={draft.suggestedWhatsappMessage || ""} onChange={(value) => update("suggestedWhatsappMessage", value)} />
+          <TextArea label="Argumento presencial" value={draft.inPersonArgument || ""} onChange={(value) => update("inPersonArgument", value)} />
+        </section>
+
+        <section className="detail-section">
+          <h3>Scoring</h3>
+          <ScoreMetric label="Digital" value={draft.scorePresenciaDigital || 0} />
+          <ScoreMetric label="Urgencia" value={draft.scoreUrgencia || 0} />
+          <ScoreMetric label="Dinero" value={draft.scoreDinero || 0} />
+          <ScoreMetric label="Contacto" value={draft.scoreFacilidadContacto || 0} />
+          <ScoreMetric label="Cierre" value={draft.scoreProbabilidadCierre || 0} />
+          <ScoreMetric label="Visita" value={draft.scorePrioridadVisita || 0} />
+          <div className="score-reasons">
+            {(draft.scoreExplanation || []).map((reason) => (
+              <span key={reason}>{reason}</span>
+            ))}
+          </div>
+        </section>
+
+        <section className="detail-section">
+          <h3>Actividad</h3>
+          <label>
+            Tipo
+            <select value={activityType} onChange={(event) => setActivityType(event.target.value)}>
+              {["WhatsApp", "llamada", "email", "Instagram", "visita", "reunión", "propuesta", "nota"].map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+          <DateField label="Recordatorio" value={activityReminder} onChange={setActivityReminder} />
+          <TextArea label="Resultado" value={activityResult} onChange={setActivityResult} />
+          <TextArea label="Siguiente acción" value={activityNext} onChange={setActivityNext} />
+          <button
+            className="button detail-form__wide"
+            type="button"
+            onClick={() => {
+              onAddActivity(draft, {
+                type: activityType,
+                result: activityResult,
+                nextAction: activityNext,
+                reminderAt: activityReminder
+              });
+              setActivityResult("");
+              setActivityNext("");
+              setActivityReminder("");
+            }}
+          >
+            Registrar actividad
+          </button>
+          <div className="timeline detail-form__wide">
+            {activities.length || tasks.length || notes.length ? (
+              <>
+                {tasks.slice(0, 3).map((task) => (
+                  <article key={task.id}>
+                    <strong>{task.title}</strong>
+                    <span>{task.dueAt ? new Date(task.dueAt).toLocaleString("es-ES") : "Sin fecha"} · {task.status}</span>
+                  </article>
+                ))}
+                {activities.slice(0, 5).map((activity) => (
+                  <article key={activity.id}>
+                    <strong>{activity.type}</strong>
+                    <span>{activity.result || activity.nextAction || "Actividad registrada"}</span>
+                  </article>
+                ))}
+                {notes.slice(0, 3).map((note) => (
+                  <article key={note.id}>
+                    <strong>Nota</strong>
+                    <span>{note.note}</span>
+                  </article>
+                ))}
+              </>
+            ) : (
+              <span className="empty-state">Sin actividad todavía</span>
+            )}
+          </div>
+        </section>
+
+        <section className="detail-section">
+          <h3>Google y datos</h3>
           <NumberField label="Rating" value={draft.rating} onChange={(value) => update("rating", value)} />
           <NumberField label="Reseñas" value={draft.reviews} onChange={(value) => update("reviews", value)} />
           <NumberField label="Fotos" value={draft.googlePhotos} onChange={(value) => update("googlePhotos", value)} />
@@ -260,6 +369,23 @@ function NumberField({
   );
 }
 
+function DateField({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      {label}
+      <input type="datetime-local" value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
 function TextArea({
   label,
   value,
@@ -274,5 +400,15 @@ function TextArea({
       {label}
       <textarea value={value} rows={3} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+function ScoreMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="score-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <i style={{ width: `${value}%` }} />
+    </div>
   );
 }

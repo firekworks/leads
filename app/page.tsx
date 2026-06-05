@@ -1,5 +1,10 @@
+import { AuthGate } from "@/components/AuthGate";
 import { LeadsWorkspace } from "@/components/LeadsWorkspace";
 
 export default function RadarPage() {
-  return <LeadsWorkspace initialView="radar" />;
+  return (
+    <AuthGate>
+      <LeadsWorkspace initialView="radar" />
+    </AuthGate>
+  );
 }

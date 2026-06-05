@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireInternalUser } from "@/lib/api-auth";
 import type { Lead } from "@/types/lead";
 
 const LINK_PATTERN = /<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi;
 
 export async function POST(request: Request) {
+  const auth = await requireInternalUser(request, { write: true });
+  if ("response" in auth) return auth.response;
+
   const body = (await request.json()) as { lead?: Lead };
   const lead = body.lead;
 

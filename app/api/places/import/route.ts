@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { requireInternalUser } from "@/lib/api-auth";
 import { normalizeLeads, toLeadRow, withScore, type LeadRow } from "@/lib/leads-codec";
-import { createAdminClient } from "@/lib/supabase/admin";
 import type { Lead, LeadSector } from "@/types/lead";
 
 export const dynamic = "force-dynamic";
@@ -94,6 +94,9 @@ type PlacesSearchResult = {
 };
 
 export async function POST(request: Request) {
+  const auth = await requireInternalUser(request, { write: true });
+  if ("response" in auth) return auth.response;
+
   const body = (await request.json()) as PlacesImportRequest;
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   const city = FOIA_CITIES.includes(body.city || "") ? body.city! : "Castalla";
@@ -151,11 +154,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const supabase = createAdminClient();
-  if (!supabase) {
-    return NextResponse.json({ error: "Faltan variables de Supabase en el servidor" }, { status: 503 });
-  }
-
+  const supabase = auth.admin;
   const ids = incomingLeads.map((lead) => lead.id);
   const { data: existingRows, error: existingError } = await supabase
     .from("leads")
@@ -202,7 +201,7 @@ export async function POST(request: Request) {
     .from("leads")
     .select("*")
     .order("is_invalid", { ascending: true })
-    .order("score", { ascending: false });
+    .order("score_total", { ascending: false });
 
   if (readError) {
     return NextResponse.json({ error: readError.message }, { status: 500 });
@@ -359,7 +358,7 @@ function placeToLead(place: GooglePlace, city: string, sector: string): Lead {
     lastSeenAt: now,
     lastRefreshedAt: now,
     reviewOwnerCandidates: [],
-    status: isClosed ? "Descartado" : "Detectado",
+    status: isClosed ? "No contactar" : "Detectado",
     priority: reviews >= 100 && rating >= 4.3 ? "Alta" : "Media",
     potential: estimatePotential(inferredSector, reviews, rating),
     lastContact: "Sin contacto",

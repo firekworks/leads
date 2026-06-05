@@ -17,6 +17,7 @@ const COLUMN_PAGE_SIZE = 36;
 
 export function PipelineBoard({ leads, statuses, selectedId, onSelect, onStatusChange }: PipelineBoardProps) {
   const [columnLimits, setColumnLimits] = useState<Record<string, number>>({});
+  const [draggedId, setDraggedId] = useState("");
 
   return (
     <div className="pipeline-board">
@@ -26,7 +27,18 @@ export function PipelineBoard({ leads, statuses, selectedId, onSelect, onStatusC
         const visibleLeads = columnLeads.slice(0, visibleLimit);
 
         return (
-          <section className={`pipeline-column pipeline-column--${statusTone(status)}`} key={status}>
+          <section
+            className={`pipeline-column pipeline-column--${statusTone(status)}`}
+            key={status}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              const leadId = event.dataTransfer.getData("text/plain") || draggedId;
+              const lead = leads.find((item) => item.id === leadId);
+              setDraggedId("");
+              if (lead && lead.status !== status) onStatusChange(lead, status);
+            }}
+          >
             <header>
               <span>{status}</span>
               <strong>{columnLeads.length}</strong>
@@ -36,8 +48,21 @@ export function PipelineBoard({ leads, statuses, selectedId, onSelect, onStatusC
                 <>
                   {visibleLeads.map((lead) => (
                     <article
-                      className={selectedId === lead.id ? "pipeline-card pipeline-card--active" : "pipeline-card"}
+                      className={
+                        selectedId === lead.id
+                          ? "pipeline-card pipeline-card--active"
+                          : draggedId === lead.id
+                            ? "pipeline-card pipeline-card--dragging"
+                            : "pipeline-card"
+                      }
                       key={lead.id}
+                      draggable
+                      onDragStart={(event) => {
+                        setDraggedId(lead.id);
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", lead.id);
+                      }}
+                      onDragEnd={() => setDraggedId("")}
                     >
                       <button className="pipeline-card__body" type="button" onClick={() => onSelect(lead)}>
                         <span className={`score-pill score-pill--${scoreTone(lead.score)}`}>

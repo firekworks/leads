@@ -15,6 +15,8 @@ type FiltersProps = {
   withoutInstagram: boolean;
   withoutFacebook: boolean;
   withoutWeb: boolean;
+  withoutWhatsapp: boolean;
+  withoutPhone: boolean;
   minScore: number;
   onQuery: (value: string) => void;
   onCity: (value: string) => void;
@@ -25,6 +27,8 @@ type FiltersProps = {
   onWithoutInstagram: (value: boolean) => void;
   onWithoutFacebook: (value: boolean) => void;
   onWithoutWeb: (value: boolean) => void;
+  onWithoutWhatsapp: (value: boolean) => void;
+  onWithoutPhone: (value: boolean) => void;
   onMinScore: (value: number) => void;
 };
 
@@ -43,6 +47,8 @@ export function Filters({
   withoutInstagram,
   withoutFacebook,
   withoutWeb,
+  withoutWhatsapp,
+  withoutPhone,
   minScore,
   onQuery,
   onCity,
@@ -53,6 +59,8 @@ export function Filters({
   onWithoutInstagram,
   onWithoutFacebook,
   onWithoutWeb,
+  onWithoutWhatsapp,
+  onWithoutPhone,
   onMinScore
 }: FiltersProps) {
   return (
@@ -154,6 +162,22 @@ export function Filters({
             onChange={(event) => onWithoutWeb(event.target.checked)}
           />
           Sin web
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={withoutWhatsapp}
+            onChange={(event) => onWithoutWhatsapp(event.target.checked)}
+          />
+          Sin WhatsApp
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={withoutPhone}
+            onChange={(event) => onWithoutPhone(event.target.checked)}
+          />
+          Sin teléfono
         </label>
       </div>
     </div>

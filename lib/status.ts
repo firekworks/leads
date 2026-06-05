@@ -1,14 +1,19 @@
 import type { LeadStatus } from "@/types/lead";
 
 export const statusColors: Record<LeadStatus, string> = {
-  Descartado: "red",
   Detectado: "gray",
   Validado: "blue",
-  Interesado: "yellow",
-  "Visita/Reunión": "orange",
+  Prioritario: "red",
+  Contactado: "yellow",
+  Respondió: "orange",
+  "Reunión agendada": "lilac",
+  "Diagnóstico hecho": "blue",
+  "Propuesta enviada": "yellow",
   Negociación: "lilac",
-  Cliente: "green",
-  Desinteresado: "muted-red"
+  Ganado: "green",
+  Perdido: "muted-red",
+  "No encaja": "muted-red",
+  "No contactar": "red"
 };
 
 export function statusTone(status: LeadStatus) {

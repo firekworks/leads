@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireInternalUser } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,9 @@ type GoogleReview = {
 };
 
 export async function POST(request: Request) {
+  const auth = await requireInternalUser(request, { write: true });
+  if ("response" in auth) return auth.response;
+
   const body = (await request.json()) as OwnerRequest;
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
 

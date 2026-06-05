@@ -2,14 +2,13 @@ import { createClient } from "@supabase/supabase-js";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 
 export function createAdminClient() {
-  const { url, secretKey, anonKey } = getSupabaseConfig();
-  const key = secretKey || anonKey;
+  const { url, secretKey } = getSupabaseConfig();
 
-  if (!url || !key) {
+  if (!url || !secretKey) {
     return null;
   }
 
-  return createClient(url, key, {
+  return createClient(url, secretKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false

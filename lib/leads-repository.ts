@@ -18,9 +18,12 @@ type LeadsApiResponse = {
   error?: string;
 };
 
-export async function loadLeads(): Promise<LeadsLoadResult> {
+export async function loadLeads(accessToken?: string): Promise<LeadsLoadResult> {
   try {
-    const response = await fetch("/api/leads", { cache: "no-store" });
+    const response = await fetch("/api/leads", {
+      cache: "no-store",
+      headers: authHeaders(accessToken)
+    });
     const payload = (await response.json()) as LeadsApiResponse;
 
     if (!response.ok || !payload.leads) {
@@ -39,14 +42,14 @@ export async function loadLeads(): Promise<LeadsLoadResult> {
   }
 }
 
-export async function persistLead(lead: Lead) {
+export async function persistLead(lead: Lead, accessToken?: string) {
   const scoredLead = withScore(lead);
   const localLeads = upsertLocalLead(scoredLead);
 
   try {
     const response = await fetch("/api/leads", {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders(accessToken) },
       body: JSON.stringify({ lead: scoredLead })
     });
     const payload = (await response.json()) as LeadsApiResponse;
@@ -63,14 +66,14 @@ export async function persistLead(lead: Lead) {
   }
 }
 
-export async function persistLeads(leads: Lead[]) {
+export async function persistLeads(leads: Lead[], accessToken?: string) {
   const scoredLeads = leads.map(withScore).sort(sortLeads);
   saveLocalLeads(scoredLeads);
 
   try {
     const response = await fetch("/api/leads", {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders(accessToken) },
       body: JSON.stringify({ leads: scoredLeads })
     });
     const payload = (await response.json()) as LeadsApiResponse;
@@ -117,6 +120,13 @@ export function createBlankLead(): Lead {
     lastSeenAt: now,
     lastRefreshedAt: "",
     reviewOwnerCandidates: [],
+    ownerUserId: "",
+    assignedTo: "",
+    clientId: "",
+    latitude: null,
+    longitude: null,
+    nextFollowUpAt: "",
+    nextFollowUpType: "",
     status: "Detectado",
     priority: "Media",
     potential: 350,
@@ -124,6 +134,24 @@ export function createBlankLead(): Lead {
     nextAction: "",
     pain: "",
     diagnosis: "",
+    problemDetected: "",
+    opportunityDetected: "",
+    salesHook: "",
+    recommendedService: "",
+    probableObjection: "",
+    suggestedWhatsappMessage: "",
+    suggestedInstagramMessage: "",
+    inPersonArgument: "",
+    recommendedOffer: "",
+    scoreTotal: 0,
+    scorePresenciaDigital: 0,
+    scoreUrgencia: 0,
+    scoreDinero: 0,
+    scoreFacilidadContacto: 0,
+    scoreProbabilidadCierre: 0,
+    scorePotencialMensualidad: 0,
+    scorePrioridadVisita: 0,
+    scoreExplanation: [],
     signals: {
       web: false,
       instagram: false,
@@ -132,6 +160,8 @@ export function createBlankLead(): Lead {
       photos: false,
       googleProfile: false
     },
+    adsSignal: "",
+    dataQuality: {},
     createdAt: now,
     updatedAt: now
   };
@@ -226,4 +256,8 @@ function scoredLeadsFallback(leads: Lead[]) {
 
 function csvCell(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
+}
+
+function authHeaders(accessToken?: string): HeadersInit {
+  return accessToken ? { authorization: `Bearer ${accessToken}` } : {};
 }
