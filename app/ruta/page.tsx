@@ -1,5 +1,10 @@
+import { AuthGate } from "@/components/AuthGate";
 import { LeadsWorkspace } from "@/components/LeadsWorkspace";
 
 export default function RutaPage() {
-  return <LeadsWorkspace initialView="ruta" />;
+  return (
+    <AuthGate>
+      <LeadsWorkspace initialView="ruta" />
+    </AuthGate>
+  );
 }

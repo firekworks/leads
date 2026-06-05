@@ -1,12 +1,17 @@
 export type LeadStatus =
-  | "Descartado"
   | "Detectado"
   | "Validado"
-  | "Interesado"
-  | "Visita/Reunión"
+  | "Prioritario"
+  | "Contactado"
+  | "Respondió"
+  | "Reunión agendada"
+  | "Diagnóstico hecho"
+  | "Propuesta enviada"
   | "Negociación"
-  | "Cliente"
-  | "Desinteresado";
+  | "Ganado"
+  | "Perdido"
+  | "No encaja"
+  | "No contactar";
 
 export type LeadPriority = "Muy alta" | "Alta" | "Media" | "Baja";
 
@@ -67,6 +72,13 @@ export type Lead = {
   lastSeenAt: string;
   lastRefreshedAt: string;
   reviewOwnerCandidates: string[];
+  ownerUserId?: string;
+  assignedTo?: string;
+  clientId?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  nextFollowUpAt?: string;
+  nextFollowUpType?: string;
   status: LeadStatus;
   priority: LeadPriority;
   potential: number;
@@ -74,8 +86,83 @@ export type Lead = {
   nextAction: string;
   pain: string;
   diagnosis: string;
+  problemDetected?: string;
+  opportunityDetected?: string;
+  salesHook?: string;
+  recommendedService?: string;
+  probableObjection?: string;
+  suggestedWhatsappMessage?: string;
+  suggestedInstagramMessage?: string;
+  inPersonArgument?: string;
+  recommendedOffer?: string;
   score: number;
+  scoreTotal?: number;
+  scorePresenciaDigital?: number;
+  scoreUrgencia?: number;
+  scoreDinero?: number;
+  scoreFacilidadContacto?: number;
+  scoreProbabilidadCierre?: number;
+  scorePotencialMensualidad?: number;
+  scorePrioridadVisita?: number;
+  scoreExplanation?: string[];
   signals: LeadSignals;
+  adsSignal?: string;
+  dataQuality?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LeadActivity = {
+  id: string;
+  leadId: string;
+  userId: string;
+  type: "llamada" | "WhatsApp" | "email" | "Instagram" | "visita" | "reunión" | "propuesta" | "nota" | "sistema";
+  occurredAt: string;
+  result: string;
+  nextAction: string;
+  reminderAt: string;
+  fileUrl: string;
+  createdAt: string;
+};
+
+export type LeadTask = {
+  id: string;
+  leadId: string;
+  userId: string;
+  type: string;
+  title: string;
+  description: string;
+  dueAt: string;
+  priority: LeadPriority;
+  status: "pendiente" | "hecha" | "pospuesta" | "cancelada";
+  completedAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LeadNote = {
+  id: string;
+  leadId: string;
+  userId: string;
+  note: string;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Client = {
+  id: string;
+  leadId: string;
+  name: string;
+  sector: string;
+  city: string;
+  phone: string;
+  website: string;
+  billingName: string;
+  taxId: string;
+  billingEmail: string;
+  billingAddress: string;
+  status: "Pendiente datos fiscales" | "Activo" | "Pausado" | "Baja";
   createdAt: string;
   updatedAt: string;
 };

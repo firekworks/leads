@@ -1,36 +1,30 @@
 import { NextResponse } from "next/server";
+import { requireInternalUser } from "@/lib/api-auth";
 import { normalizeLeads, seedRows, toLeadRow, withScore, type LeadRow } from "@/lib/leads-codec";
-import { createAdminClient } from "@/lib/supabase/admin";
 import type { Lead } from "@/types/lead";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const supabase = createAdminClient();
+export async function GET(request: Request) {
+  const auth = await requireInternalUser(request);
+  if ("response" in auth) return auth.response;
 
-  if (!supabase) {
-    return NextResponse.json(
-      { error: "Faltan variables de Supabase en el servidor" },
-      { status: 503 }
-    );
-  }
-
-  const { data, error } = await supabase
+  const { data, error } = await auth.admin
     .from("leads")
     .select("*")
     .order("is_invalid", { ascending: true })
-    .order("score", { ascending: false });
+    .order("score_total", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   if (!data?.length) {
-    const { data: seeded, error: seedError } = await supabase
+    const { data: seeded, error: seedError } = await auth.admin
       .from("leads")
       .upsert(seedRows())
       .select("*")
-      .order("score", { ascending: false });
+      .order("score_total", { ascending: false });
 
     if (seedError) {
       return NextResponse.json({ error: seedError.message }, { status: 500 });
@@ -43,14 +37,8 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const supabase = createAdminClient();
-
-  if (!supabase) {
-    return NextResponse.json(
-      { error: "Faltan variables de Supabase en el servidor" },
-      { status: 503 }
-    );
-  }
+  const auth = await requireInternalUser(request, { write: true });
+  if ("response" in auth) return auth.response;
 
   const body = (await request.json()) as { lead?: Lead; leads?: Lead[] };
   const leads = body.leads || (body.lead ? [body.lead] : []);
@@ -60,17 +48,17 @@ export async function PUT(request: Request) {
   }
 
   const rows = leads.map((lead) => toLeadRow(withScore(lead)));
-  const { error } = await supabase.from("leads").upsert(rows);
+  const { error } = await auth.admin.from("leads").upsert(rows);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const { data, error: readError } = await supabase
+  const { data, error: readError } = await auth.admin
     .from("leads")
     .select("*")
     .order("is_invalid", { ascending: true })
-    .order("score", { ascending: false });
+    .order("score_total", { ascending: false });
 
   if (readError) {
     return NextResponse.json({ error: readError.message }, { status: 500 });

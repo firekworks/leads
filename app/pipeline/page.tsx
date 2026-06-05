@@ -1,5 +1,10 @@
+import { AuthGate } from "@/components/AuthGate";
 import { LeadsWorkspace } from "@/components/LeadsWorkspace";
 
 export default function PipelinePage() {
-  return <LeadsWorkspace initialView="pipeline" />;
+  return (
+    <AuthGate>
+      <LeadsWorkspace initialView="pipeline" />
+    </AuthGate>
+  );
 }

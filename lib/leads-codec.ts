@@ -1,5 +1,5 @@
 import { leads as seedLeads } from "@/lib/mock-leads";
-import { computeScore } from "@/lib/scoring";
+import { computeScoreBreakdown } from "@/lib/scoring";
 import type { ContentUse, FollowersBucket, Lead, LeadSignals, LeadSource, LeadStatus } from "@/types/lead";
 
 export type LeadRow = {
@@ -31,6 +31,13 @@ export type LeadRow = {
   last_seen_at: string | null;
   last_refreshed_at: string | null;
   review_owner_candidates: string[] | null;
+  owner_user_id?: string | null;
+  assigned_to?: string | null;
+  client_id?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  next_follow_up_at?: string | null;
+  next_follow_up_type?: string | null;
   status: LeadStatus | null;
   priority: Lead["priority"] | null;
   potential: number | null;
@@ -38,8 +45,28 @@ export type LeadRow = {
   next_action: string | null;
   pain: string | null;
   diagnosis: string | null;
+  problem_detected?: string | null;
+  opportunity_detected?: string | null;
+  sales_hook?: string | null;
+  recommended_service?: string | null;
+  probable_objection?: string | null;
+  suggested_whatsapp_message?: string | null;
+  suggested_instagram_message?: string | null;
+  in_person_argument?: string | null;
+  recommended_offer?: string | null;
   score: number | null;
+  score_total?: number | null;
+  score_presencia_digital?: number | null;
+  score_urgencia?: number | null;
+  score_dinero?: number | null;
+  score_facilidad_contacto?: number | null;
+  score_probabilidad_cierre?: number | null;
+  score_potencial_mensualidad?: number | null;
+  score_prioridad_visita?: number | null;
+  score_explanation?: unknown;
   signals: LeadSignals | null;
+  ads_signal?: string | null;
+  data_quality?: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -80,6 +107,33 @@ export function normalizeLocal(leads: Lead[]) {
       lastSeenAt: lead.lastSeenAt || lead.updatedAt || new Date().toISOString(),
       lastRefreshedAt: lead.lastRefreshedAt || "",
       reviewOwnerCandidates: legacy.reviewOwnerCandidates || [],
+      ownerUserId: lead.ownerUserId || "",
+      assignedTo: lead.assignedTo || "",
+      clientId: lead.clientId || "",
+      latitude: lead.latitude ?? null,
+      longitude: lead.longitude ?? null,
+      nextFollowUpAt: lead.nextFollowUpAt || "",
+      nextFollowUpType: lead.nextFollowUpType || "",
+      problemDetected: lead.problemDetected || lead.pain || "",
+      opportunityDetected: lead.opportunityDetected || lead.diagnosis || "",
+      salesHook: lead.salesHook || "",
+      recommendedService: lead.recommendedService || "",
+      probableObjection: lead.probableObjection || "",
+      suggestedWhatsappMessage: lead.suggestedWhatsappMessage || "",
+      suggestedInstagramMessage: lead.suggestedInstagramMessage || "",
+      inPersonArgument: lead.inPersonArgument || "",
+      recommendedOffer: lead.recommendedOffer || "",
+      scoreTotal: lead.scoreTotal || lead.score || 0,
+      scorePresenciaDigital: lead.scorePresenciaDigital || 0,
+      scoreUrgencia: lead.scoreUrgencia || 0,
+      scoreDinero: lead.scoreDinero || 0,
+      scoreFacilidadContacto: lead.scoreFacilidadContacto || 0,
+      scoreProbabilidadCierre: lead.scoreProbabilidadCierre || 0,
+      scorePotencialMensualidad: lead.scorePotencialMensualidad || 0,
+      scorePrioridadVisita: lead.scorePrioridadVisita || 0,
+      scoreExplanation: lead.scoreExplanation || [],
+      adsSignal: lead.adsSignal || "",
+      dataQuality: lead.dataQuality || {},
       signals: inferSignals({
         ...lead,
         instagram_url: instagramUrl,
@@ -123,6 +177,13 @@ export function fromLeadRow(row: LeadRow): Lead {
     lastSeenAt: row.last_seen_at || row.updated_at || new Date().toISOString(),
     lastRefreshedAt: row.last_refreshed_at || "",
     reviewOwnerCandidates: row.review_owner_candidates || [],
+    ownerUserId: row.owner_user_id || "",
+    assignedTo: row.assigned_to || "",
+    clientId: row.client_id || "",
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
+    nextFollowUpAt: row.next_follow_up_at || "",
+    nextFollowUpType: row.next_follow_up_type || "",
     status: row.status || "Detectado",
     priority: row.priority || "Media",
     potential: Number(row.potential || 0),
@@ -130,8 +191,28 @@ export function fromLeadRow(row: LeadRow): Lead {
     nextAction: row.next_action || "",
     pain: row.pain || "",
     diagnosis: row.diagnosis || "",
+    problemDetected: row.problem_detected || row.pain || "",
+    opportunityDetected: row.opportunity_detected || row.diagnosis || "",
+    salesHook: row.sales_hook || "",
+    recommendedService: row.recommended_service || "",
+    probableObjection: row.probable_objection || "",
+    suggestedWhatsappMessage: row.suggested_whatsapp_message || "",
+    suggestedInstagramMessage: row.suggested_instagram_message || "",
+    inPersonArgument: row.in_person_argument || "",
+    recommendedOffer: row.recommended_offer || "",
     score: Number(row.score || 0),
+    scoreTotal: Number(row.score_total || row.score || 0),
+    scorePresenciaDigital: Number(row.score_presencia_digital || 0),
+    scoreUrgencia: Number(row.score_urgencia || 0),
+    scoreDinero: Number(row.score_dinero || 0),
+    scoreFacilidadContacto: Number(row.score_facilidad_contacto || 0),
+    scoreProbabilidadCierre: Number(row.score_probabilidad_cierre || 0),
+    scorePotencialMensualidad: Number(row.score_potencial_mensualidad || 0),
+    scorePrioridadVisita: Number(row.score_prioridad_visita || 0),
+    scoreExplanation: normalizeStringArray(row.score_explanation),
     signals: row.signals || inferSignals(row),
+    adsSignal: row.ads_signal || "",
+    dataQuality: row.data_quality || {},
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString()
   };
@@ -180,6 +261,13 @@ export function toLeadRow(lead: Lead): LeadRow {
     last_seen_at: normalized.lastSeenAt || new Date().toISOString(),
     last_refreshed_at: normalized.lastRefreshedAt,
     review_owner_candidates: normalized.reviewOwnerCandidates,
+    owner_user_id: normalized.ownerUserId || null,
+    assigned_to: normalized.assignedTo || null,
+    client_id: normalized.clientId || null,
+    latitude: normalized.latitude,
+    longitude: normalized.longitude,
+    next_follow_up_at: normalized.nextFollowUpAt || null,
+    next_follow_up_type: normalized.nextFollowUpType,
     status: normalized.status,
     priority: normalized.priority,
     potential: normalized.potential,
@@ -187,8 +275,28 @@ export function toLeadRow(lead: Lead): LeadRow {
     next_action: normalized.nextAction,
     pain: normalized.pain,
     diagnosis: normalized.diagnosis,
+    problem_detected: normalized.problemDetected,
+    opportunity_detected: normalized.opportunityDetected,
+    sales_hook: normalized.salesHook,
+    recommended_service: normalized.recommendedService,
+    probable_objection: normalized.probableObjection,
+    suggested_whatsapp_message: normalized.suggestedWhatsappMessage,
+    suggested_instagram_message: normalized.suggestedInstagramMessage,
+    in_person_argument: normalized.inPersonArgument,
+    recommended_offer: normalized.recommendedOffer,
     score: normalized.score,
+    score_total: normalized.scoreTotal,
+    score_presencia_digital: normalized.scorePresenciaDigital,
+    score_urgencia: normalized.scoreUrgencia,
+    score_dinero: normalized.scoreDinero,
+    score_facilidad_contacto: normalized.scoreFacilidadContacto,
+    score_probabilidad_cierre: normalized.scoreProbabilidadCierre,
+    score_potencial_mensualidad: normalized.scorePotencialMensualidad,
+    score_prioridad_visita: normalized.scorePrioridadVisita,
+    score_explanation: normalized.scoreExplanation,
     signals: normalized.signals,
+    ads_signal: normalized.adsSignal,
+    data_quality: normalized.dataQuality,
     created_at: normalized.createdAt,
     updated_at: new Date().toISOString()
   };
@@ -205,7 +313,7 @@ export function withScore<T extends Omit<Lead, "score"> | Lead>(lead: T): Lead {
     google_photos: "googlePhotos" in lead ? lead.googlePhotos : 0
   } as Partial<LeadRow>);
 
-  return {
+  const current = {
     ...lead,
     contentUse,
     placeId: "placeId" in lead ? lead.placeId : "",
@@ -216,8 +324,33 @@ export function withScore<T extends Omit<Lead, "score"> | Lead>(lead: T): Lead {
     lastRefreshedAt: "lastRefreshedAt" in lead ? lead.lastRefreshedAt : "",
     reviewOwnerCandidates: "reviewOwnerCandidates" in lead ? lead.reviewOwnerCandidates : [],
     signals,
-    score: computeScore({ ...lead, contentUse, signals } as Lead)
+    ownerUserId: "ownerUserId" in lead ? lead.ownerUserId : "",
+    assignedTo: "assignedTo" in lead ? lead.assignedTo : "",
+    clientId: "clientId" in lead ? lead.clientId : "",
+    latitude: "latitude" in lead ? lead.latitude : null,
+    longitude: "longitude" in lead ? lead.longitude : null,
+    nextFollowUpAt: "nextFollowUpAt" in lead ? lead.nextFollowUpAt : "",
+    nextFollowUpType: "nextFollowUpType" in lead ? lead.nextFollowUpType : "",
+    problemDetected: "problemDetected" in lead ? lead.problemDetected : "pain" in lead ? lead.pain : "",
+    opportunityDetected: "opportunityDetected" in lead ? lead.opportunityDetected : "diagnosis" in lead ? lead.diagnosis : "",
+    salesHook: "salesHook" in lead ? lead.salesHook : "",
+    recommendedService: "recommendedService" in lead ? lead.recommendedService : "",
+    probableObjection: "probableObjection" in lead ? lead.probableObjection : "",
+    suggestedWhatsappMessage: "suggestedWhatsappMessage" in lead ? lead.suggestedWhatsappMessage : "",
+    suggestedInstagramMessage: "suggestedInstagramMessage" in lead ? lead.suggestedInstagramMessage : "",
+    inPersonArgument: "inPersonArgument" in lead ? lead.inPersonArgument : "",
+    recommendedOffer: "recommendedOffer" in lead ? lead.recommendedOffer : "",
+    adsSignal: "adsSignal" in lead ? lead.adsSignal : "",
+    dataQuality: "dataQuality" in lead ? lead.dataQuality : {}
   } as Lead;
+
+  const breakdown = computeScoreBreakdown(current);
+
+  return {
+    ...current,
+    score: breakdown.scoreTotal,
+    ...breakdown
+  };
 }
 
 export function inferSignals(row: Partial<LeadRow>) {
@@ -241,20 +374,30 @@ export function inferSignals(row: Partial<LeadRow>) {
 export function normalizeStatus(status: string): LeadStatus {
   const legacy: Record<string, LeadStatus> = {
     "No contactado": "Detectado",
-    Visitado: "Visita/Reunión",
-    Propuesta: "Negociación",
-    Perdido: "Descartado"
+    Visitado: "Reunión agendada",
+    Propuesta: "Propuesta enviada",
+    Descargado: "No contactar",
+    Descartado: "No contactar",
+    Interesado: "Respondió",
+    "Visita/Reunión": "Reunión agendada",
+    Cliente: "Ganado",
+    Desinteresado: "Perdido"
   };
 
   const allowed: LeadStatus[] = [
-    "Descartado",
     "Detectado",
     "Validado",
-    "Interesado",
-    "Visita/Reunión",
+    "Prioritario",
+    "Contactado",
+    "Respondió",
+    "Reunión agendada",
+    "Diagnóstico hecho",
+    "Propuesta enviada",
     "Negociación",
-    "Cliente",
-    "Desinteresado"
+    "Ganado",
+    "Perdido",
+    "No encaja",
+    "No contactar"
   ];
 
   return legacy[status] || (allowed.includes(status as LeadStatus) ? (status as LeadStatus) : "Detectado");
@@ -282,6 +425,10 @@ export function normalizeSocialUrl(value: string, network: "instagram" | "facebo
   return network === "instagram"
     ? `https://instagram.com/${handle}`
     : `https://facebook.com/search/top?q=${encodeURIComponent(handle)}`;
+}
+
+function normalizeStringArray(value: unknown) {
+  return Array.isArray(value) ? value.map(String) : [];
 }
 
 export function seedRows() {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AppShell } from "@/components/AppShell";
+import { useInternalAuth } from "@/components/AuthGate";
 import { Background } from "@/components/Background";
 import { Filters } from "@/components/Filters";
 import { LeadCard } from "@/components/LeadCard";
@@ -18,7 +19,7 @@ import {
 } from "@/lib/leads-repository";
 import { estimateWeightedMonthlyValue } from "@/lib/scoring";
 import { leads as seedLeads, statuses } from "@/lib/mock-leads";
-import type { ContentUse, FollowersBucket, Lead, LeadStatus, RouteStop } from "@/types/lead";
+import type { ContentUse, FollowersBucket, Lead, LeadActivity, LeadNote, LeadStatus, LeadTask, RouteStop } from "@/types/lead";
 
 type LeadsWorkspaceProps = {
   initialView: "radar" | "pipeline" | "ruta";
@@ -52,6 +53,7 @@ type EnrichResponse = Partial<
 };
 
 export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
+  const { accessToken, profile, signOut } = useInternalAuth();
   const [leadItems, setLeadItems] = useState<Lead[]>(seedLeads);
   const [query, setQuery] = useState("");
   const [city, setCity] = useState("");
@@ -62,6 +64,8 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const [withoutInstagram, setWithoutInstagram] = useState(false);
   const [withoutFacebook, setWithoutFacebook] = useState(false);
   const [withoutWeb, setWithoutWeb] = useState(false);
+  const [withoutWhatsapp, setWithoutWhatsapp] = useState(false);
+  const [withoutPhone, setWithoutPhone] = useState(false);
   const [minScore, setMinScore] = useState(0);
   const [selectedId, setSelectedId] = useState(seedLeads[0]?.id || "");
   const [dataSource, setDataSource] = useState<LeadsSource>("localStorage");
@@ -69,13 +73,19 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const [enrichingId, setEnrichingId] = useState("");
   const [findingOwnerId, setFindingOwnerId] = useState("");
   const [importingPlaces, setImportingPlaces] = useState(false);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [placesMessage, setPlacesMessage] = useState("Foia preparada: Castalla, Ibi, Onil, Biar y Tibi");
   const [visibleLeadCount, setVisibleLeadCount] = useState(RADAR_PAGE_SIZE);
+  const [leadCrm, setLeadCrm] = useState<{ activities: LeadActivity[]; tasks: LeadTask[]; notes: LeadNote[] }>({
+    activities: [],
+    tasks: [],
+    notes: []
+  });
 
   useEffect(() => {
     let active = true;
 
-    loadLeads().then((result) => {
+    loadLeads(accessToken).then((result) => {
       if (!active) return;
       setLeadItems(result.leads);
       setDataSource(result.source);
@@ -92,7 +102,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [accessToken]);
 
   const cities = useMemo(() => uniqueOptions(leadItems.map((lead) => lead.city)), [leadItems]);
   const sectors = useMemo(() => uniqueOptions(leadItems.map((lead) => lead.sector)), [leadItems]);
@@ -128,7 +138,9 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         (!withoutInstagram || !lead.instagramUrl) &&
         (!withoutFacebook || !lead.facebookUrl) &&
         (!withoutWeb || !lead.website) &&
-        (!lead.isInvalid || status === "Descartado") &&
+        (!withoutWhatsapp || !lead.whatsappUrl) &&
+        (!withoutPhone || !lead.phone) &&
+        (!lead.isInvalid || status === "No contactar") &&
         (!minScore || lead.score >= minScore)
       );
     });
@@ -143,6 +155,8 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     status,
     withoutFacebook,
     withoutInstagram,
+    withoutPhone,
+    withoutWhatsapp,
     withoutWeb
   ]);
 
@@ -158,6 +172,8 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     status,
     withoutFacebook,
     withoutInstagram,
+    withoutPhone,
+    withoutWhatsapp,
     withoutWeb
   ]);
 
@@ -166,13 +182,50 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const selectedLead =
     filteredLeads.find((lead) => lead.id === selectedId) || filteredLeads[0] || leadItems[0];
 
+  useEffect(() => {
+    if (!selectedLead?.id) return;
+
+    let active = true;
+
+    fetch(`/api/leads/${selectedLead.id}/crm`, {
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      }
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as {
+          activities?: LeadActivity[];
+          tasks?: LeadTask[];
+          notes?: LeadNote[];
+        };
+        if (!response.ok) throw new Error("No se pudo cargar actividad");
+        return payload;
+      })
+      .then((payload) => {
+        if (!active) return;
+        setLeadCrm({
+          activities: payload.activities || [],
+          tasks: payload.tasks || [],
+          notes: payload.notes || []
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        setLeadCrm({ activities: [], tasks: [], notes: [] });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [accessToken, selectedLead?.id]);
+
   const routeStops = useMemo<RouteStop[]>(
     () =>
       leadItems
         .filter(
           (lead) =>
             !lead.isInvalid &&
-            !["Cliente", "Descartado", "Desinteresado"].includes(lead.status) &&
+            !["Ganado", "Perdido", "No encaja", "No contactar"].includes(lead.status) &&
             ["Castalla", "Ibi", "Onil", "Biar", "Tibi"].includes(lead.city)
         )
         .slice()
@@ -193,7 +246,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   }
 
   async function handleSaveLead(lead: Lead) {
-    const result = await persistLead(lead);
+    const result = await persistLead(lead, accessToken);
     setLeadItems(result.leads);
     setDataSource(result.source);
     setSyncMessage(result.source === "supabase" ? "Guardado en Supabase" : "Guardado en localStorage");
@@ -206,7 +259,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 
   async function handleNewLead() {
     const lead = createBlankLead();
-    const result = await persistLead(lead);
+    const result = await persistLead(lead, accessToken);
     setLeadItems(result.leads);
     setSelectedId(lead.id);
     setDataSource(result.source);
@@ -219,7 +272,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     try {
       const response = await fetch("/api/enrich", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ lead })
       });
       const enriched = (await response.json()) as EnrichResponse;
@@ -251,7 +304,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     try {
       const response = await fetch("/api/places/owner", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ placeId: lead.placeId, allowPaidRequests: true })
       });
       const payload = (await response.json()) as { candidates?: string[]; error?: string };
@@ -280,7 +333,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     try {
       const response = await fetch("/api/places/import", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
           city: city || "Castalla",
           sector: sector || "Restaurantes",
@@ -318,12 +371,128 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     }
   }
 
+  async function handleDuplicateScan() {
+    setCheckingDuplicates(true);
+
+    try {
+      const response = await fetch("/api/leads/duplicates", {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}` }
+      });
+      const payload = (await response.json()) as { saved?: number; groups?: Record<string, number>; error?: string };
+
+      if (!response.ok) throw new Error(payload.error || "No se pudieron detectar duplicados");
+
+      const groups = Object.entries(payload.groups || {})
+        .map(([reason, count]) => `${reason}: ${count}`)
+        .join(" · ");
+      setPlacesMessage(payload.saved ? `Duplicados pendientes guardados: ${groups}` : "Sin duplicados detectados");
+    } catch (error) {
+      setPlacesMessage(error instanceof Error ? error.message : "No se pudieron detectar duplicados");
+    } finally {
+      setCheckingDuplicates(false);
+    }
+  }
+
+  async function handleAddActivity(
+    lead: Lead,
+    activity: { type: string; result: string; nextAction: string; reminderAt: string }
+  ) {
+    const response = await fetch(`/api/leads/${lead.id}/crm`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ activity })
+    });
+    const payload = (await response.json()) as {
+      activities?: LeadActivity[];
+      tasks?: LeadTask[];
+      notes?: LeadNote[];
+      error?: string;
+    };
+
+    if (!response.ok) {
+      setSyncMessage(payload.error || "No se pudo registrar actividad");
+      return;
+    }
+
+    setLeadCrm({
+      activities: payload.activities || [],
+      tasks: payload.tasks || [],
+      notes: payload.notes || []
+    });
+
+    if (activity.nextAction || activity.reminderAt) {
+      await handleSaveLead({
+        ...lead,
+        nextAction: activity.nextAction,
+        nextFollowUpAt: activity.reminderAt,
+        nextFollowUpType: activity.type,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    setSyncMessage("Actividad registrada");
+  }
+
+  async function handleConvertLead(lead: Lead) {
+    const response = await fetch(`/api/leads/${lead.id}/convert`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({})
+    });
+    const payload = (await response.json()) as { lead?: Lead; error?: string };
+
+    if (!response.ok || !payload.lead) {
+      setSyncMessage(payload.error || "No se pudo convertir en cliente");
+      return;
+    }
+
+    const result = await persistLead(payload.lead, accessToken);
+    setLeadItems(result.leads);
+    setSelectedId(payload.lead.id);
+    setSyncMessage("Lead convertido en cliente");
+  }
+
   const hotLeads = leadItems.filter((lead) => lead.score >= 80).length;
   const openPipeline = leadItems.filter(
-    (lead) => !lead.isInvalid && !["Cliente", "Descartado", "Desinteresado"].includes(lead.status)
+    (lead) => !lead.isInvalid && !["Ganado", "Perdido", "No encaja", "No contactar"].includes(lead.status)
   ).length;
   const monthlyEstimate = leadItems.reduce((total, lead) => total + estimateWeightedMonthlyValue(lead), 0);
   const missingInstagram = leadItems.filter((lead) => !lead.instagramUrl && !lead.isInvalid).length;
+  const dashboard = useMemo(() => {
+    const valid = leadItems.filter((lead) => !lead.isInvalid);
+    const now = new Date();
+    const newThisMonth = valid.filter((lead) => {
+      const created = new Date(lead.createdAt);
+      return created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth();
+    }).length;
+    const bySector = topGroups(valid, "sector");
+    const byCity = topGroups(valid, "city");
+    const won = valid.filter((lead) => lead.status === "Ganado").length;
+    const contacted = valid.filter((lead) =>
+      ["Contactado", "Respondió", "Reunión agendada", "Diagnóstico hecho", "Propuesta enviada", "Negociación", "Ganado"].includes(
+        lead.status
+      )
+    ).length;
+
+    return {
+      total: valid.length,
+      newThisMonth,
+      priority: valid.filter((lead) => lead.status === "Prioritario" || lead.priority === "Muy alta" || lead.score >= 80).length,
+      contacted,
+      meetings: valid.filter((lead) => lead.status === "Reunión agendada").length,
+      proposals: valid.filter((lead) => lead.status === "Propuesta enviada").length,
+      won,
+      conversion: contacted ? Math.round((won / contacted) * 100) : 0,
+      bySector,
+      byCity,
+      followUps: valid
+        .filter((lead) => lead.nextFollowUpAt)
+        .slice()
+        .sort((a, b) => String(a.nextFollowUpAt).localeCompare(String(b.nextFollowUpAt)))
+        .slice(0, 5)
+    };
+  }, [leadItems]);
 
   return (
     <main className="app">
@@ -336,9 +505,15 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
             <p className="workspace-subtitle">Prioridad, temperatura, hueco visual y siguiente acción en una sola vista.</p>
           </div>
           <div className="header-actions">
+            <span className="source-pill source-pill--supabase">
+              {profile.role} · {profile.email}
+            </span>
             <span className={`source-pill source-pill--${dataSource}`}>{syncMessage}</span>
             <button className="button button--ghost" type="button" onClick={() => exportLeadsToCsv(filteredLeads)}>
               Exportar CSV
+            </button>
+            <button className="button button--ghost" type="button" onClick={signOut}>
+              Salir
             </button>
             <button className="button" type="button" onClick={handleNewLead}>
               <span className="css-icon css-icon--plus" />
@@ -363,6 +538,53 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
           <article>
             <span>Previsión mensual</span>
             <strong>≈ {monthlyEstimate}€</strong>
+          </article>
+        </section>
+
+        <section className="dashboard-grid" aria-label="Dashboard interno">
+          <article>
+            <span>Nuevos mes</span>
+            <strong>{dashboard.newThisMonth}</strong>
+          </article>
+          <article>
+            <span>Prioritarios</span>
+            <strong>{dashboard.priority}</strong>
+          </article>
+          <article>
+            <span>Contactados</span>
+            <strong>{dashboard.contacted}</strong>
+          </article>
+          <article>
+            <span>Reuniones</span>
+            <strong>{dashboard.meetings}</strong>
+          </article>
+          <article>
+            <span>Propuestas</span>
+            <strong>{dashboard.proposals}</strong>
+          </article>
+          <article>
+            <span>Ganados</span>
+            <strong>{dashboard.won}</strong>
+          </article>
+          <article>
+            <span>Conversión</span>
+            <strong>{dashboard.conversion}%</strong>
+          </article>
+          <article className="dashboard-grid__wide">
+            <span>Sectores con potencial</span>
+            <strong>{dashboard.bySector.map(([name, count]) => `${name} ${count}`).join(" · ")}</strong>
+          </article>
+          <article className="dashboard-grid__wide">
+            <span>Ciudades</span>
+            <strong>{dashboard.byCity.map(([name, count]) => `${name} ${count}`).join(" · ")}</strong>
+          </article>
+          <article className="dashboard-grid__wide">
+            <span>Próximos seguimientos</span>
+            <strong>
+              {dashboard.followUps.length
+                ? dashboard.followUps.map((lead) => `${lead.name} · ${new Date(lead.nextFollowUpAt || "").toLocaleDateString("es-ES")}`).join(" · ")
+                : "Sin seguimientos"}
+            </strong>
           </article>
         </section>
 
@@ -392,6 +614,8 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   withoutInstagram={withoutInstagram}
                   withoutFacebook={withoutFacebook}
                   withoutWeb={withoutWeb}
+                  withoutWhatsapp={withoutWhatsapp}
+                  withoutPhone={withoutPhone}
                   minScore={minScore}
                   onQuery={setQuery}
                   onCity={setCity}
@@ -402,6 +626,8 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   onWithoutInstagram={setWithoutInstagram}
                   onWithoutFacebook={setWithoutFacebook}
                   onWithoutWeb={setWithoutWeb}
+                  onWithoutWhatsapp={setWithoutWhatsapp}
+                  onWithoutPhone={setWithoutPhone}
                   onMinScore={setMinScore}
                 />
 
@@ -425,6 +651,14 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                     disabled={importingPlaces}
                   >
                     Importar 1 búsqueda
+                  </button>
+                  <button
+                    className="button button--ghost"
+                    type="button"
+                    onClick={handleDuplicateScan}
+                    disabled={checkingDuplicates}
+                  >
+                    {checkingDuplicates ? "Revisando" : "Duplicados"}
                   </button>
                 </div>
 
@@ -469,6 +703,11 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   onSave={handleSaveLead}
                   onEnrich={handleEnrich}
                   onFindOwner={handleFindOwner}
+                  onAddActivity={handleAddActivity}
+                  onConvert={handleConvertLead}
+                  activities={leadCrm.activities}
+                  tasks={leadCrm.tasks}
+                  notes={leadCrm.notes}
                   enriching={enrichingId === selectedLead.id}
                   findingOwner={findingOwnerId === selectedLead.id}
                 />
@@ -487,7 +726,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
             >
               <div className="view-intro">
                 <span>Estados comerciales</span>
-                <p>De descartado a cliente, con señales sociales y siguiente movimiento.</p>
+                <p>Arrastra comercios entre estados y conserva cada avance en su ficha.</p>
               </div>
               <div className="pipeline-layout">
                 <PipelineBoard
@@ -504,6 +743,11 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                     onSave={handleSaveLead}
                     onEnrich={handleEnrich}
                     onFindOwner={handleFindOwner}
+                    onAddActivity={handleAddActivity}
+                    onConvert={handleConvertLead}
+                    activities={leadCrm.activities}
+                    tasks={leadCrm.tasks}
+                    notes={leadCrm.notes}
                     enriching={enrichingId === selectedLead.id}
                     findingOwner={findingOwnerId === selectedLead.id}
                   />
@@ -534,6 +778,11 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                     onSave={handleSaveLead}
                     onEnrich={handleEnrich}
                     onFindOwner={handleFindOwner}
+                    onAddActivity={handleAddActivity}
+                    onConvert={handleConvertLead}
+                    activities={leadCrm.activities}
+                    tasks={leadCrm.tasks}
+                    notes={leadCrm.notes}
                     enriching={enrichingId === selectedLead.id}
                     findingOwner={findingOwnerId === selectedLead.id}
                   />
@@ -555,4 +804,15 @@ function viewTitle(view: LeadsWorkspaceProps["initialView"]) {
 
 function uniqueOptions(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b, "es"));
+}
+
+function topGroups(leads: Lead[], key: "sector" | "city") {
+  const counts = leads.reduce<Record<string, number>>((acc, lead) => {
+    acc[lead[key]] = (acc[lead[key]] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
 }

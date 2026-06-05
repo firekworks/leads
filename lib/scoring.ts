@@ -61,6 +61,87 @@ const monthlyBaseBySector: Record<string, number> = {
 };
 
 export function computeScore(lead: Omit<Lead, "score"> | Lead) {
+  return computeScoreBreakdown(lead).scoreTotal;
+}
+
+export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
+  const hasWeb = Boolean(lead.website || lead.signals.web);
+  const hasInstagram = Boolean(lead.instagramUrl || lead.signals.instagram);
+  const hasFacebook = Boolean(lead.facebookUrl || lead.signals.facebook);
+  const hasWhatsapp = Boolean(lead.whatsappUrl || lead.signals.whatsapp);
+  const hasPhone = Boolean(lead.phone);
+  const reviews = Number(lead.reviews || 0);
+  const rating = Number(lead.rating || 0);
+  const explanation: string[] = [];
+
+  const digitalWeakness =
+    (!hasWeb ? 28 : 0) +
+    (!hasInstagram ? 20 : 0) +
+    (!hasFacebook ? 10 : 0) +
+    (!hasWhatsapp ? 10 : 0) +
+    (lead.contentUse === "Sin uso" ? 18 : lead.contentUse === "Flojo" ? 14 : lead.contentUse === "Pendiente" ? 9 : 0) +
+    (lead.googlePhotos < 5 ? 8 : 0);
+  const scorePresenciaDigital = clampScore(digitalWeakness);
+
+  const demand = Math.min(40, reviews / 7) + Math.min(20, rating * 4);
+  const urgencyGap =
+    scorePresenciaDigital * 0.55 +
+    (reviews >= 100 && rating >= 4.3 ? 24 : reviews >= 35 ? 12 : 0) +
+    (lead.adsSignal ? 10 : 0);
+  const scoreUrgencia = clampScore(urgencyGap);
+
+  const scoreDinero = clampScore((sectorPotential[lead.sector] || 8) * 5 + Math.min(24, lead.potential / 45) + demand * 0.25);
+  const scoreFacilidadContacto = clampScore(
+    (hasPhone ? 32 : 0) + (hasWhatsapp ? 34 : 0) + (hasWeb ? 14 : 0) + (lead.googleMapsUrl ? 12 : 0) + (lead.address ? 8 : 0)
+  );
+  const scoreProbabilidadCierre = clampScore(
+    scoreDinero * 0.28 +
+      scoreUrgencia * 0.28 +
+      scoreFacilidadContacto * 0.22 +
+      (lead.status === "Respondió" ? 18 : lead.status === "Reunión agendada" ? 26 : lead.status === "Propuesta enviada" ? 30 : 0)
+  );
+  const scorePotencialMensualidad = clampScore(Math.min(100, estimateRawMonthlyValue(lead) / 10));
+  const scorePrioridadVisita = clampScore(
+    (["Castalla", "Ibi", "Onil", "Biar", "Tibi"].includes(lead.city) ? 30 : 0) +
+      scoreUrgencia * 0.24 +
+      scoreDinero * 0.24 +
+      (lead.address ? 12 : 0) +
+      (rating >= 4.5 ? 10 : 0)
+  );
+  const scoreTotal = clampScore(
+    scorePresenciaDigital * 0.18 +
+      scoreUrgencia * 0.18 +
+      scoreDinero * 0.18 +
+      scoreFacilidadContacto * 0.13 +
+      scoreProbabilidadCierre * 0.15 +
+      scorePotencialMensualidad * 0.1 +
+      scorePrioridadVisita * 0.08
+  );
+
+  if (reviews >= 100 && rating >= 4.3) explanation.push(`Alta demanda visible: ${rating} estrellas y ${reviews} reseñas.`);
+  if (!hasWeb) explanation.push("No tiene web visible: oportunidad clara para landing y SEO local.");
+  if (!hasInstagram) explanation.push("Instagram ausente o no detectado: hueco para contenido profesional.");
+  if (lead.contentUse === "Sin uso" || lead.contentUse === "Flojo") explanation.push(`Uso de contenido ${lead.contentUse.toLowerCase()}: necesita imagen y constancia.`);
+  if (hasWhatsapp || hasPhone) explanation.push("Contacto fácil: se puede activar WhatsApp Business y seguimiento comercial.");
+  if (["Clínicas", "Fisioterapia", "Inmobiliarias", "Hoteles", "Turismo rural", "Veterinarios"].includes(lead.sector)) {
+    explanation.push("Sector con margen para mensualidad y campañas locales.");
+  }
+  if (explanation.length === 0) explanation.push("Lead detectado para validación manual de presencia digital y encaje comercial.");
+
+  return {
+    scoreTotal,
+    scorePresenciaDigital,
+    scoreUrgencia,
+    scoreDinero,
+    scoreFacilidadContacto,
+    scoreProbabilidadCierre,
+    scorePotencialMensualidad,
+    scorePrioridadVisita,
+    scoreExplanation: explanation.slice(0, 5)
+  };
+}
+
+function computeLegacyScore(lead: Omit<Lead, "score"> | Lead) {
   const commercialPotential = Math.min(
     30,
     Math.round((sectorPotential[lead.sector] || 8) + Math.min(lead.potential / 55, 18))
@@ -128,12 +209,17 @@ export function scoreTone(score: number) {
 }
 
 export function estimateMonthlyValue(lead: Lead) {
-  if (["Cliente", "Descartado", "Desinteresado"].includes(lead.status) || lead.isInvalid) {
+  if (["Ganado", "Perdido", "No encaja", "No contactar"].includes(lead.status) || lead.isInvalid) {
     return 0;
   }
 
+  return estimateRawMonthlyValue(lead);
+}
+
+function estimateRawMonthlyValue(lead: Omit<Lead, "score"> | Lead) {
   const base = monthlyBaseBySector[lead.sector] || 340;
-  const scoreMultiplier = lead.score >= 80 ? 1.25 : lead.score >= 60 ? 0.85 : lead.score >= 40 ? 0.45 : 0.18;
+  const score = "score" in lead ? lead.score : computeLegacyScore(lead);
+  const scoreMultiplier = score >= 80 ? 1.25 : score >= 60 ? 0.85 : score >= 40 ? 0.45 : 0.18;
   const visualOpportunity =
     lead.contentUse === "Sin uso"
       ? 1.14
@@ -158,13 +244,21 @@ export function estimateWeightedMonthlyValue(lead: Lead) {
   const stageMultiplier: Record<string, number> = {
     Detectado: 0.65,
     Validado: 0.9,
-    Interesado: 1.15,
-    "Visita/Reunión": 1.35,
+    Prioritario: 1,
+    Contactado: 1.05,
+    Respondió: 1.15,
+    "Reunión agendada": 1.35,
+    "Diagnóstico hecho": 1.45,
+    "Propuesta enviada": 1.6,
     Negociación: 1.7
   };
   const probability = scoreProbability * (stageMultiplier[lead.status] || 1);
 
   return Math.round((monthlyValue * probability) / 25) * 25;
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
 }
 
 export function recommendServicePlan(lead: Lead) {
