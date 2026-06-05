@@ -1,0 +1,10 @@
+alter view if exists public.client_profile_view set (security_invoker = true);
+alter view if exists public.client_dashboard_view set (security_invoker = true);
+alter view if exists public.client_campaigns_view set (security_invoker = true);
+alter view if exists public.client_content_view set (security_invoker = true);
+alter view if exists public.client_reports_view set (security_invoker = true);
+alter view if exists public.client_invoices_view set (security_invoker = true);
+alter view if exists public.client_leaderboard_view set (security_invoker = true);
+alter view if exists public.client_score_public_view set (security_invoker = true);
+alter view if exists public.client_alerts_public_view set (security_invoker = true);
+alter view if exists public.client_tasks_public_view set (security_invoker = true);

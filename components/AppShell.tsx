@@ -4,13 +4,14 @@ import type { ReactNode } from "react";
 
 type AppShellProps = {
   children: ReactNode;
-  currentView: "radar" | "pipeline" | "ruta";
+  currentView: "radar" | "pipeline" | "ruta" | "textos";
 };
 
 const navItems = [
   { href: "/", id: "radar", label: "Radar", icon: "radar" },
   { href: "/pipeline", id: "pipeline", label: "Pipeline", icon: "pipeline" },
-  { href: "/ruta", id: "ruta", label: "Ruta", icon: "route" }
+  { href: "/ruta", id: "ruta", label: "Ruta", icon: "route" },
+  { href: "/admin/settings/texts", id: "textos", label: "Textos", icon: "settings" }
 ] as const;
 
 export function AppShell({ children, currentView }: AppShellProps) {

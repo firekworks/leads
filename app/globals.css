@@ -1116,6 +1116,21 @@ a {
   transform: rotate(90deg);
 }
 
+.css-icon--settings::before {
+  inset: 1px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.css-icon--settings::after {
+  width: 6px;
+  height: 6px;
+  left: 6px;
+  top: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .lead-page {
   min-height: 100vh;
   padding: 28px;
@@ -2160,6 +2175,46 @@ body {
   display: block;
 }
 
+.texts-admin {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.8fr) minmax(420px, 1.2fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.filters--texts {
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 180px);
+}
+
+.text-row {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(7, 33, 53, 0.74);
+  color: var(--text);
+  padding: 12px;
+  cursor: pointer;
+}
+
+.text-row strong,
+.text-row span {
+  overflow-wrap: anywhere;
+}
+
+.text-row span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.text-row--active {
+  border-color: rgba(41, 231, 205, 0.56);
+  background: rgba(41, 231, 205, 0.1);
+}
+
 .auth-screen {
   min-height: 100vh;
   display: grid;
@@ -2170,8 +2225,10 @@ body {
 
 .auth-panel {
   width: min(420px, 100%);
+  background: #ffffff;
   border-radius: 28px;
   padding: 28px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.12);
 }
 
 .auth-panel h1 {
@@ -2181,7 +2238,7 @@ body {
 
 .auth-panel p,
 .auth-panel small {
-  color: var(--soft);
+  color: #6b7280;
 }
 
 .auth-mark {
@@ -2200,7 +2257,7 @@ body {
 .auth-panel label {
   display: grid;
   gap: 6px;
-  color: var(--soft);
+  color: #374151;
   font-size: 0.82rem;
   font-weight: 800;
 }
@@ -2214,6 +2271,15 @@ body {
   padding: 0 12px;
 }
 
+.auth-link {
+  margin-top: 12px;
+  border: 0;
+  background: transparent;
+  color: #0f766e;
+  cursor: pointer;
+  font-weight: 850;
+}
+
 @media (max-width: 1180px) {
   .dashboard-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2221,6 +2287,10 @@ body {
 
   .dashboard-grid__wide {
     grid-column: span 3;
+  }
+
+  .texts-admin {
+    grid-template-columns: 1fr;
   }
 }
 

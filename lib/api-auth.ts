@@ -2,15 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseConfig } from "@/lib/supabase/config";
-
-export type InternalRole = "admin" | "sales" | "viewer";
-
-export type InternalProfile = {
-  userId: string;
-  email: string;
-  fullName: string;
-  role: InternalRole;
-};
+import type { InternalProfile, InternalRole } from "@/types/auth";
 
 type RequireOptions = {
   write?: boolean;
