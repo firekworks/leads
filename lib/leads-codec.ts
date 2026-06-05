@@ -1,8 +1,9 @@
 import { leads as seedLeads } from "@/lib/mock-leads";
-import { computeScoreBreakdown } from "@/lib/scoring";
+import { classifyLeadFit, computeScoreBreakdown } from "@/lib/scoring";
 import type {
   ContentUse,
   EnrichmentStatus,
+  FitClassification,
   FollowersBucket,
   InstagramStatus,
   Lead,
@@ -41,6 +42,8 @@ export type LeadRow = {
   is_disqualified?: boolean | null;
   disqualified_reason?: string | null;
   disqualified_category?: string | null;
+  fit_classification?: FitClassification | null;
+  manual_override?: boolean | null;
   validation_status?: ValidationStatus | null;
   instagram_status?: InstagramStatus | null;
   enrichment_status?: EnrichmentStatus | null;
@@ -81,6 +84,7 @@ export type LeadRow = {
   score_potencial_mensualidad?: number | null;
   score_prioridad_visita?: number | null;
   score_explanation?: unknown;
+  score_tags?: unknown;
   signals: LeadSignals | null;
   ads_signal?: string | null;
   data_quality?: Record<string, unknown> | null;
@@ -124,6 +128,8 @@ export function normalizeLocal(leads: Lead[]) {
       isDisqualified: lead.isDisqualified ?? Boolean(legacy.isInvalid),
       disqualifiedReason: lead.disqualifiedReason || lead.invalidReason || "",
       disqualifiedCategory: lead.disqualifiedCategory || "",
+      fitClassification: lead.fitClassification || "unknown",
+      manualOverride: Boolean(lead.manualOverride),
       validationStatus: lead.validationStatus || (legacy.isInvalid ? "descartado" : "pendiente"),
       instagramStatus: lead.instagramStatus || (instagramUrl ? "encontrado" : "pendiente"),
       enrichmentStatus: lead.enrichmentStatus || (lead.lastRefreshedAt ? "parcial" : "pendiente"),
@@ -156,6 +162,7 @@ export function normalizeLocal(leads: Lead[]) {
       scorePotencialMensualidad: lead.scorePotencialMensualidad || 0,
       scorePrioridadVisita: lead.scorePrioridadVisita || 0,
       scoreExplanation: lead.scoreExplanation || [],
+      scoreTags: lead.scoreTags || [],
       adsSignal: lead.adsSignal || "",
       dataQuality: lead.dataQuality || {},
       signals: inferSignals({
@@ -201,6 +208,8 @@ export function fromLeadRow(row: LeadRow): Lead {
     isDisqualified: Boolean(row.is_disqualified || row.is_invalid),
     disqualifiedReason: row.disqualified_reason || row.invalid_reason || "",
     disqualifiedCategory: row.disqualified_category || "",
+    fitClassification: normalizeFitClassification(row.fit_classification || "unknown"),
+    manualOverride: Boolean(row.manual_override),
     validationStatus: normalizeValidationStatus(row.validation_status || (row.is_invalid || row.is_disqualified ? "descartado" : "pendiente")),
     instagramStatus: normalizeInstagramStatus(row.instagram_status || (row.instagram_url ? "encontrado" : "pendiente")),
     enrichmentStatus: normalizeEnrichmentStatus(row.enrichment_status || (row.last_refreshed_at ? "parcial" : "pendiente")),
@@ -241,6 +250,7 @@ export function fromLeadRow(row: LeadRow): Lead {
     scorePotencialMensualidad: Number(row.score_potencial_mensualidad || 0),
     scorePrioridadVisita: Number(row.score_prioridad_visita || 0),
     scoreExplanation: normalizeStringArray(row.score_explanation),
+    scoreTags: normalizeStringArray(row.score_tags),
     signals: row.signals || inferSignals(row),
     adsSignal: row.ads_signal || "",
     dataQuality: row.data_quality || {},
@@ -292,6 +302,8 @@ export function toLeadRow(lead: Lead): LeadRow {
     is_disqualified: normalized.isInvalid || Boolean(normalized.isDisqualified),
     disqualified_reason: normalized.disqualifiedReason || normalized.invalidReason || "",
     disqualified_category: normalized.disqualifiedCategory || "",
+    fit_classification: normalized.fitClassification || "unknown",
+    manual_override: Boolean(normalized.manualOverride),
     validation_status: normalizeValidationStatus(normalized.validationStatus || (normalized.isInvalid ? "descartado" : "pendiente")),
     instagram_status: normalizeInstagramStatus(normalized.instagramStatus || (normalized.instagramUrl ? "encontrado" : "pendiente")),
     enrichment_status: normalizeEnrichmentStatus(normalized.enrichmentStatus || (normalized.lastRefreshedAt ? "parcial" : "pendiente")),
@@ -332,6 +344,7 @@ export function toLeadRow(lead: Lead): LeadRow {
     score_potencial_mensualidad: normalized.scorePotencialMensualidad,
     score_prioridad_visita: normalized.scorePrioridadVisita,
     score_explanation: normalized.scoreExplanation,
+    score_tags: normalized.scoreTags,
     signals: normalized.signals,
     ads_signal: normalized.adsSignal,
     data_quality: normalized.dataQuality,
@@ -351,19 +364,45 @@ export function withScore<T extends Omit<Lead, "score"> | Lead>(lead: T): Lead {
     google_photos: "googlePhotos" in lead ? lead.googlePhotos : 0
   } as Partial<LeadRow>);
 
+  const existingInvalid = "isInvalid" in lead ? Boolean(lead.isInvalid) : false;
+  const existingDisqualified = "isDisqualified" in lead ? Boolean(lead.isDisqualified) : existingInvalid;
+  const manualOverride = "manualOverride" in lead ? Boolean(lead.manualOverride) : false;
+  const fit = classifyLeadFit({ ...lead, contentUse, signals } as Lead);
+  const shouldDisqualify = !manualOverride && (fit.disqualified || existingInvalid || existingDisqualified);
+  const disqualifiedReason =
+    shouldDisqualify
+      ? ("disqualifiedReason" in lead && lead.disqualifiedReason) ||
+        ("invalidReason" in lead && lead.invalidReason) ||
+        fit.reason
+      : "disqualifiedReason" in lead
+        ? lead.disqualifiedReason
+        : "invalidReason" in lead
+          ? lead.invalidReason
+          : "";
+  const disqualifiedCategory =
+    shouldDisqualify
+      ? ("disqualifiedCategory" in lead && lead.disqualifiedCategory) || fit.classification
+      : "disqualifiedCategory" in lead
+        ? lead.disqualifiedCategory
+        : "";
+
   const current = {
     ...lead,
     contentUse,
     placeId: "placeId" in lead ? lead.placeId : "",
     source: "source" in lead ? lead.source : "manual",
-    isInvalid: "isInvalid" in lead ? lead.isInvalid : false,
-    invalidReason: "invalidReason" in lead ? lead.invalidReason : "",
-    isDisqualified: "isDisqualified" in lead ? lead.isDisqualified : "isInvalid" in lead ? lead.isInvalid : false,
-    disqualifiedReason:
-      "disqualifiedReason" in lead ? lead.disqualifiedReason : "invalidReason" in lead ? lead.invalidReason : "",
-    disqualifiedCategory: "disqualifiedCategory" in lead ? lead.disqualifiedCategory : "",
+    isInvalid: shouldDisqualify,
+    invalidReason: shouldDisqualify ? disqualifiedReason : "invalidReason" in lead ? lead.invalidReason : "",
+    isDisqualified: shouldDisqualify,
+    disqualifiedReason,
+    disqualifiedCategory,
+    fitClassification:
+      shouldDisqualify || !("fitClassification" in lead)
+        ? fit.classification
+        : normalizeFitClassification(lead.fitClassification || fit.classification),
+    manualOverride,
     validationStatus:
-      "validationStatus" in lead ? normalizeValidationStatus(lead.validationStatus || "pendiente") : "pendiente",
+      shouldDisqualify ? "descartado" : "validationStatus" in lead ? normalizeValidationStatus(lead.validationStatus || "pendiente") : "pendiente",
     instagramStatus:
       "instagramStatus" in lead
         ? normalizeInstagramStatus(lead.instagramStatus || "pendiente")
@@ -393,6 +432,13 @@ export function withScore<T extends Omit<Lead, "score"> | Lead>(lead: T): Lead {
     suggestedInstagramMessage: "suggestedInstagramMessage" in lead ? lead.suggestedInstagramMessage : "",
     inPersonArgument: "inPersonArgument" in lead ? lead.inPersonArgument : "",
     recommendedOffer: "recommendedOffer" in lead ? lead.recommendedOffer : "",
+    status:
+      shouldDisqualify && (!("status" in lead) || lead.status !== "Perdido")
+        ? "No contactar"
+        : "status" in lead
+          ? normalizeStatus(String(lead.status))
+          : "Detectado",
+    scoreTags: "scoreTags" in lead ? lead.scoreTags : [],
     adsSignal: "adsSignal" in lead ? lead.adsSignal : "",
     dataQuality: "dataQuality" in lead ? lead.dataQuality : {}
   } as Lead;
@@ -482,6 +528,22 @@ export function normalizeInstagramStatus(value: string): InstagramStatus {
 export function normalizeEnrichmentStatus(value: string): EnrichmentStatus {
   const allowed: EnrichmentStatus[] = ["pendiente", "parcial", "completo", "error"];
   return allowed.includes(value as EnrichmentStatus) ? (value as EnrichmentStatus) : "pendiente";
+}
+
+export function normalizeFitClassification(value: string): FitClassification {
+  const allowed: FitClassification[] = [
+    "valid_client_candidate",
+    "public_entity",
+    "tourism_public",
+    "healthcare_public",
+    "education_public",
+    "emergency_service",
+    "government",
+    "duplicate",
+    "low_fit",
+    "unknown"
+  ];
+  return allowed.includes(value as FitClassification) ? (value as FitClassification) : "unknown";
 }
 
 export function normalizeSocialUrl(value: string, network: "instagram" | "facebook") {

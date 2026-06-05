@@ -1,4 +1,4 @@
-import type { Lead } from "@/types/lead";
+import type { FitClassification, Lead } from "@/types/lead";
 
 const sectorPotential: Record<string, number> = {
   Restaurantes: 12,
@@ -26,7 +26,7 @@ const sectorPotential: Record<string, number> = {
   Decoración: 9,
   Muebles: 10,
   Hoteles: 12,
-  "Turismo rural": 12,
+  "Turismo rural": 8,
   Comercios: 8
 };
 
@@ -56,15 +56,112 @@ const monthlyBaseBySector: Record<string, number> = {
   Decoración: 420,
   Muebles: 520,
   Hoteles: 620,
-  "Turismo rural": 580,
+  "Turismo rural": 420,
   Comercios: 320
 };
+
+type FitResult = {
+  classification: FitClassification;
+  disqualified: boolean;
+  reason: string;
+  tags: string[];
+};
+
+const fitLabels: Record<FitClassification, string> = {
+  valid_client_candidate: "Privado",
+  public_entity: "Entidad pública",
+  tourism_public: "Turismo público",
+  healthcare_public: "Salud pública",
+  education_public: "Educación pública",
+  emergency_service: "Emergencias",
+  government: "Administración",
+  duplicate: "Duplicado",
+  low_fit: "Bajo encaje",
+  unknown: "Revisar"
+};
+
+const governmentTerms = [
+  "ayuntamiento",
+  "ajuntament",
+  "diputacion",
+  "conselleria",
+  "generalitat",
+  "ministerio",
+  "juzgado",
+  "registro civil",
+  "sepe",
+  "seguridad social",
+  "suma gestion",
+  "mancomunidad",
+  "servicio publico"
+];
+
+const tourismPublicTerms = [
+  "oficina de turismo",
+  "tourist info",
+  "turismo municipal",
+  "museo municipal",
+  "museo de",
+  "mubio",
+  "castillo de",
+  "palacio-fortaleza",
+  "palacio fortaleza",
+  "casa de cultura",
+  "casa cultura municipal",
+  "biblioteca municipal",
+  "laberinto casa tapena",
+  "casa tapena"
+];
+
+const healthcarePublicTerms = [
+  "centro de salud",
+  "consultorio publico",
+  "consultorio medico auxiliar",
+  "consultorio medico",
+  "hospital publico",
+  "ambulatorio"
+];
+
+const educationPublicTerms = [
+  "colegio publico",
+  "instituto publico",
+  "ies ",
+  "ceip ",
+  "escuela infantil municipal"
+];
+
+const emergencyTerms = ["policia", "guardia civil", "bomberos", "proteccion civil"];
+const lowFitTerms = ["banco", "cajero", "eurocaja", "sabadell", "caixabank", "bbva", "santander"];
 
 export function computeScore(lead: Omit<Lead, "score"> | Lead) {
   return computeScoreBreakdown(lead).scoreTotal;
 }
 
 export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
+  const fit = classifyLeadFit(lead);
+  const forcedDiscard =
+    !lead.manualOverride &&
+    (fit.disqualified ||
+      Boolean(lead.isInvalid) ||
+      Boolean(lead.isDisqualified) ||
+      ["No contactar", "No encaja", "Perdido"].includes(String(lead.status)));
+
+  if (forcedDiscard) {
+    const baseScore = fit.classification === "duplicate" ? 10 : fit.classification === "low_fit" ? 22 : 18;
+    return {
+      scoreTotal: Math.min(25, baseScore),
+      scorePresenciaDigital: 0,
+      scoreUrgencia: 0,
+      scoreDinero: 0,
+      scoreFacilidadContacto: 0,
+      scoreProbabilidadCierre: 0,
+      scorePotencialMensualidad: 0,
+      scorePrioridadVisita: 0,
+      scoreExplanation: [fit.reason || lead.disqualifiedReason || lead.invalidReason || "No cliente probable."],
+      scoreTags: ["No cliente", fitLabels[fit.classification]].filter(Boolean)
+    };
+  }
+
   const hasWeb = Boolean(lead.website || lead.signals.web);
   const hasInstagram = Boolean(lead.instagramUrl || lead.signals.instagram);
   const hasFacebook = Boolean(lead.facebookUrl || lead.signals.facebook);
@@ -73,6 +170,7 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
   const reviews = Number(lead.reviews || 0);
   const rating = Number(lead.rating || 0);
   const explanation: string[] = [];
+  const tags: string[] = [fitLabels[fit.classification]];
 
   const digitalWeakness =
     (!hasWeb ? 28 : 0) +
@@ -118,13 +216,29 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
       scorePrioridadVisita * 0.08
   );
 
-  if (reviews >= 100 && rating >= 4.3) explanation.push(`Alta demanda visible: ${rating} estrellas y ${reviews} reseñas.`);
-  if (!hasWeb) explanation.push("No tiene web visible: oportunidad clara para landing y SEO local.");
-  if (!hasInstagram) explanation.push("Instagram ausente o no detectado: hueco para contenido profesional.");
-  if (lead.contentUse === "Sin uso" || lead.contentUse === "Flojo") explanation.push(`Uso de contenido ${lead.contentUse.toLowerCase()}: necesita imagen y constancia.`);
-  if (hasWhatsapp || hasPhone) explanation.push("Contacto fácil: se puede activar WhatsApp Business y seguimiento comercial.");
+  if (reviews >= 100 && rating >= 4.3) {
+    explanation.push(`${rating} estrellas y ${reviews} reseñas: demanda visible.`);
+    tags.push("Demanda");
+  }
+  if (!hasWeb) {
+    explanation.push("Sin web visible: oportunidad de landing y SEO local.");
+    tags.push("Sin web");
+  }
+  if (!hasInstagram) {
+    explanation.push("Instagram ausente o no detectado: hueco de contenido.");
+    tags.push("Sin IG");
+  }
+  if (lead.contentUse === "Sin uso" || lead.contentUse === "Flojo") {
+    explanation.push(`Contenido ${lead.contentUse.toLowerCase()}: buen ángulo audiovisual.`);
+    tags.push("Hueco visual");
+  }
+  if (hasWhatsapp || hasPhone) {
+    explanation.push("Contacto fácil para WhatsApp Business y seguimiento.");
+    tags.push("Contacto");
+  }
   if (["Clínicas", "Fisioterapia", "Inmobiliarias", "Hoteles", "Turismo rural", "Veterinarios"].includes(lead.sector)) {
     explanation.push("Sector con margen para mensualidad y campañas locales.");
+    tags.push("Ticket alto");
   }
   if (explanation.length === 0) explanation.push("Lead detectado para validación manual de presencia digital y encaje comercial.");
 
@@ -137,8 +251,118 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
     scoreProbabilidadCierre,
     scorePotencialMensualidad,
     scorePrioridadVisita,
-    scoreExplanation: explanation.slice(0, 5)
+    scoreExplanation: explanation.slice(0, 5),
+    scoreTags: Array.from(new Set(tags)).slice(0, 5)
   };
+}
+
+export function classifyLeadFit(lead: Omit<Lead, "score"> | Lead): FitResult {
+  const haystack = normalizeForFit(
+    [
+      lead.name,
+      lead.sector,
+      lead.description,
+      lead.websiteTitle,
+      lead.address,
+      lead.disqualifiedReason,
+      lead.invalidReason
+    ].join(" ")
+  );
+
+  if (lead.manualOverride) {
+    return {
+      classification: "valid_client_candidate",
+      disqualified: false,
+      reason: "Restaurado manualmente para revisión comercial.",
+      tags: ["Privado", "Manual"]
+    };
+  }
+
+  if (lead.validationStatus === "duplicado" || lead.disqualifiedCategory === "duplicate") {
+    return {
+      classification: "duplicate",
+      disqualified: true,
+      reason: "Duplicado pendiente de fusionar.",
+      tags: ["Duplicado"]
+    };
+  }
+
+  if (matchesAny(haystack, emergencyTerms)) {
+    return disqualifiedFit("emergency_service", "Servicio de emergencia: no cliente probable.");
+  }
+  if (matchesAny(haystack, governmentTerms)) {
+    return disqualifiedFit("government", "Administración pública: no cliente probable.");
+  }
+  if (matchesAny(haystack, tourismPublicTerms)) {
+    return disqualifiedFit("tourism_public", "Turismo o espacio público: no cliente probable.");
+  }
+  if (matchesAny(haystack, healthcarePublicTerms)) {
+    return disqualifiedFit("healthcare_public", "Servicio sanitario público: no cliente probable.");
+  }
+  if (matchesAny(haystack, educationPublicTerms)) {
+    return disqualifiedFit("education_public", "Centro educativo público: no cliente probable.");
+  }
+  if (matchesAny(haystack, lowFitTerms)) {
+    return {
+      classification: "low_fit",
+      disqualified: false,
+      reason: "Bajo encaje con servicios audiovisuales y captación local.",
+      tags: ["Bajo encaje"]
+    };
+  }
+
+  const privateSector = [
+    "restaurantes",
+    "bares",
+    "cafeterias",
+    "clinicas",
+    "fisioterapia",
+    "veterinarios",
+    "gimnasios",
+    "estetica",
+    "peluquerias",
+    "barberias",
+    "academias",
+    "autoescuelas",
+    "talleres",
+    "inmobiliarias",
+    "moda",
+    "zapaterias",
+    "deporte",
+    "floristerias",
+    "decoracion",
+    "muebles",
+    "hoteles",
+    "turismo rural",
+    "comercios"
+  ].some((sector) => haystack.includes(sector));
+
+  return {
+    classification: privateSector ? "valid_client_candidate" : "unknown",
+    disqualified: false,
+    reason: privateSector ? "Comercio privado con encaje comercial." : "Pendiente de validar encaje.",
+    tags: [privateSector ? "Privado" : "Revisar"]
+  };
+}
+
+function disqualifiedFit(classification: FitClassification, reason: string): FitResult {
+  return {
+    classification,
+    disqualified: true,
+    reason,
+    tags: ["No cliente", fitLabels[classification]]
+  };
+}
+
+function matchesAny(value: string, terms: string[]) {
+  return terms.some((term) => value.includes(term));
+}
+
+function normalizeForFit(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function computeLegacyScore(lead: Omit<Lead, "score"> | Lead) {
@@ -195,23 +419,21 @@ function computeLegacyScore(lead: Omit<Lead, "score"> | Lead) {
 }
 
 export function scoreLabel(score: number) {
-  if (score >= 90) return "Fuego";
-  if (score >= 75) return "Muy caliente";
+  if (score >= 80) return "Muy caliente";
   if (score >= 60) return "Caliente";
   if (score >= 40) return "Templado";
   return "Frío";
 }
 
 export function scoreTone(score: number) {
-  if (score >= 90) return "fire";
-  if (score >= 75) return "hot";
+  if (score >= 80) return "hot";
   if (score >= 60) return "warm";
   if (score >= 40) return "temperate";
   return "cold";
 }
 
 export function estimateMonthlyValue(lead: Lead) {
-  if (["Ganado", "Perdido", "No encaja", "No contactar"].includes(lead.status) || lead.isInvalid) {
+  if (["Perdido", "No encaja", "No contactar"].includes(lead.status) || lead.isInvalid || lead.isDisqualified) {
     return 0;
   }
 
@@ -297,7 +519,7 @@ export function recommendServicePlan(lead: Lead) {
 }
 
 export function estimateAdBudget(lead: Lead) {
-  const premiumSector = ["Clínicas", "Inmobiliarias", "Hoteles", "Turismo rural"].includes(lead.sector);
+  const premiumSector = ["Clínicas", "Inmobiliarias", "Hoteles"].includes(lead.sector);
   if (lead.score >= 80) return premiumSector ? 500 : 350;
   if (lead.score >= 60) return 220;
   if (lead.score >= 40) return 120;

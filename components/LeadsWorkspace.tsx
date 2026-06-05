@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AppShell } from "@/components/AppShell";
-import { useInternalAuth } from "@/components/AuthGate";
 import { Background } from "@/components/Background";
 import { Filters } from "@/components/Filters";
 import { LeadCard } from "@/components/LeadCard";
 import { LeadDetail } from "@/components/LeadDetail";
 import { PipelineBoard } from "@/components/PipelineBoard";
+import { PulseDashboard } from "@/components/PulseDashboard";
 import { RoutePlanner } from "@/components/RoutePlanner";
+import { useInternalAuth } from "@/components/AuthGate";
 import {
   createBlankLead,
   exportLeadsToCsv,
@@ -17,53 +18,32 @@ import {
   persistLead,
   type LeadsSource
 } from "@/lib/leads-repository";
-import { estimateWeightedMonthlyValue } from "@/lib/scoring";
 import { leads as seedLeads, statuses } from "@/lib/mock-leads";
 import type { ContentUse, FollowersBucket, Lead, LeadActivity, LeadNote, LeadStatus, LeadTask, RouteStop } from "@/types/lead";
 
 type LeadsWorkspaceProps = {
-  initialView: "radar" | "leads" | "pipeline" | "ruta" | "discarded";
+  initialView: "pulse" | "leads" | "pipeline" | "route";
 };
 
-const followersBuckets: FollowersBucket[] = [
-  "Pendiente",
-  "Sin cuenta",
-  "< 1.000",
-  "1.000 - 5.000",
-  "+5.000"
-];
-
-const contentUses: ContentUse[] = [
-  "Pendiente",
-  "Sin uso",
-  "Flojo",
-  "Activo",
-  "Muy trabajado"
-];
-
-const targetCities = ["Castalla", "Ibi", "Onil", "Biar", "Tibi", "Elda", "Petrer", "Villena"];
-
-const RADAR_PAGE_SIZE = 80;
-
-const savedViews = [
-  { id: "all", label: "Todo", icon: "store" },
-  { id: "priority", label: "Prioritarios", icon: "flame" },
-  { id: "noInstagram", label: "Sin IG", icon: "instagram" },
-  { id: "noWeb", label: "Sin web", icon: "web" },
-  { id: "contactEasy", label: "Contacto fácil", icon: "whatsapp" }
-] as const;
-
-type EnrichResponse = Partial<
-  Pick<
-    Lead,
-    "description" | "instagramUrl" | "facebookUrl" | "whatsappUrl" | "logoUrl" | "websiteTitle"
-  >
-> & {
+type EnrichResponse = Partial<Pick<Lead, "description" | "instagramUrl" | "facebookUrl" | "whatsappUrl" | "logoUrl" | "websiteTitle">> & {
   error?: string;
 };
 
+const followersBuckets: FollowersBucket[] = ["Pendiente", "Sin cuenta", "< 1.000", "1.000 - 5.000", "+5.000"];
+const contentUses: ContentUse[] = ["Pendiente", "Sin uso", "Flojo", "Activo", "Muy trabajado"];
+const targetCities = ["Castalla", "Ibi", "Onil", "Alcoy", "Biar", "Tibi", "Elda", "Petrer", "Villena", "Alicante", "Valencia"];
+const PAGE_SIZE = 70;
+const quickViews = [
+  { id: "all", label: "Todo", icon: "store" },
+  { id: "hot", label: "Calientes", icon: "flame" },
+  { id: "noInstagram", label: "Sin IG", icon: "instagram" },
+  { id: "noWeb", label: "Sin web", icon: "web" },
+  { id: "contactEasy", label: "Contacto fácil", icon: "phone" },
+  { id: "discard", label: "Revisar descarte", icon: "ban" }
+] as const;
+
 export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
-  const { accessToken, profile, signOut } = useInternalAuth();
+  const { accessToken, profile } = useInternalAuth();
   const [leadItems, setLeadItems] = useState<Lead[]>(seedLeads);
   const [query, setQuery] = useState("");
   const [city, setCity] = useState("");
@@ -78,15 +58,11 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const [withoutPhone, setWithoutPhone] = useState(false);
   const [minScore, setMinScore] = useState(0);
   const [selectedId, setSelectedId] = useState("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [visibleLeadCount, setVisibleLeadCount] = useState(PAGE_SIZE);
   const [dataSource, setDataSource] = useState<LeadsSource>("localStorage");
-  const [syncMessage, setSyncMessage] = useState("Cargando datos");
+  const [syncMessage, setSyncMessage] = useState("Cargando");
   const [enrichingId, setEnrichingId] = useState("");
   const [findingOwnerId, setFindingOwnerId] = useState("");
-  const [importingPlaces, setImportingPlaces] = useState(false);
-  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
-  const [placesMessage, setPlacesMessage] = useState("Zona preparada: Foia, Elda, Petrer y Villena");
-  const [visibleLeadCount, setVisibleLeadCount] = useState(RADAR_PAGE_SIZE);
   const [leadCrm, setLeadCrm] = useState<{ activities: LeadActivity[]; tasks: LeadTask[]; notes: LeadNote[] }>({
     activities: [],
     tasks: [],
@@ -95,56 +71,68 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 
   useEffect(() => {
     let active = true;
-
     loadLeads(accessToken).then((result) => {
       if (!active) return;
       setLeadItems(result.leads);
       setDataSource(result.source);
-      setSyncMessage(
-        result.source === "supabase"
-          ? "Supabase activo"
-          : result.error
-            ? `Fallback local: ${result.error}`
-            : "Fallback local activo"
-      );
+      setSyncMessage(result.source === "supabase" ? "Guardado" : result.error || "Local");
     });
-
     return () => {
       active = false;
     };
   }, [accessToken]);
 
+  useEffect(() => {
+    if (initialView !== "leads") return;
+    const quick = new URLSearchParams(window.location.search).get("quick");
+    if (quick) handleQuickView(quick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialView]);
+
   const cities = useMemo(() => uniqueOptions([...targetCities, ...leadItems.map((lead) => lead.city)]), [leadItems]);
   const sectors = useMemo(() => uniqueOptions(leadItems.map((lead) => lead.sector)), [leadItems]);
+  const selectedLead = leadItems.find((lead) => lead.id === selectedId) || null;
+
+  useEffect(() => {
+    if (!selectedLead?.id) return;
+    let active = true;
+
+    fetch(`/api/leads/${selectedLead.id}/crm`, {
+      headers: { authorization: `Bearer ${accessToken}` }
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as { activities?: LeadActivity[]; tasks?: LeadTask[]; notes?: LeadNote[] };
+        if (!response.ok) throw new Error("No se pudo cargar actividad");
+        return payload;
+      })
+      .then((payload) => {
+        if (!active) return;
+        setLeadCrm({
+          activities: payload.activities || [],
+          tasks: payload.tasks || [],
+          notes: payload.notes || []
+        });
+      })
+      .catch(() => active && setLeadCrm({ activities: [], tasks: [], notes: [] }));
+
+    return () => {
+      active = false;
+    };
+  }, [accessToken, selectedLead?.id]);
 
   const filteredLeads = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const viewingDiscarded = initialView === "discarded";
-
     return leadItems.filter((lead) => {
-      const isDiscarded =
-        lead.isInvalid ||
-        Boolean(lead.isDisqualified) ||
-        ["No contactar", "No encaja", "Perdido"].includes(lead.status);
+      const discarded = isDiscarded(lead);
       const matchesQuery = normalizedQuery
-        ? [
-            lead.name,
-            lead.city,
-            lead.sector,
-            lead.pain,
-            lead.diagnosis,
-            lead.nextAction,
-            lead.description,
-            lead.ownerName,
-            lead.websiteTitle
-          ]
+        ? [lead.name, lead.city, lead.sector, lead.ownerName, lead.websiteTitle, lead.nextAction]
             .join(" ")
             .toLowerCase()
             .includes(normalizedQuery)
         : true;
 
       return (
-        (viewingDiscarded ? isDiscarded : !lead.isInvalid || status === "No contactar") &&
+        (status ? true : !discarded) &&
         matchesQuery &&
         (!city || lead.city === city) &&
         (!sector || lead.sector === sector) &&
@@ -172,310 +160,27 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     withoutInstagram,
     withoutPhone,
     withoutWhatsapp,
-    withoutWeb,
-    initialView
-  ]);
-
-  useEffect(() => {
-    setVisibleLeadCount(RADAR_PAGE_SIZE);
-  }, [
-    city,
-    contentUse,
-    followersBucket,
-    minScore,
-    query,
-    sector,
-    status,
-    withoutFacebook,
-    withoutInstagram,
-    withoutPhone,
-    withoutWhatsapp,
     withoutWeb
   ]);
 
-  const visibleLeads = filteredLeads.slice(0, visibleLeadCount);
-
-  const selectedLead = leadItems.find((lead) => lead.id === selectedId) || null;
-
   useEffect(() => {
-    if (!selectedLead?.id) return;
+    setVisibleLeadCount(PAGE_SIZE);
+  }, [city, contentUse, followersBucket, minScore, query, sector, status, withoutFacebook, withoutInstagram, withoutPhone, withoutWhatsapp, withoutWeb]);
 
-    let active = true;
-
-    fetch(`/api/leads/${selectedLead.id}/crm`, {
-      headers: {
-        authorization: `Bearer ${accessToken}`
-      }
-    })
-      .then(async (response) => {
-        const payload = (await response.json()) as {
-          activities?: LeadActivity[];
-          tasks?: LeadTask[];
-          notes?: LeadNote[];
-        };
-        if (!response.ok) throw new Error("No se pudo cargar actividad");
-        return payload;
-      })
-      .then((payload) => {
-        if (!active) return;
-        setLeadCrm({
-          activities: payload.activities || [],
-          tasks: payload.tasks || [],
-          notes: payload.notes || []
-        });
-      })
-      .catch(() => {
-        if (!active) return;
-        setLeadCrm({ activities: [], tasks: [], notes: [] });
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [accessToken, selectedLead?.id]);
-
+  const visibleLeads = filteredLeads.slice(0, visibleLeadCount);
   const routeStops = useMemo<RouteStop[]>(
     () =>
       leadItems
-        .filter(
-          (lead) =>
-            !lead.isInvalid &&
-            !["Ganado", "Perdido", "No encaja", "No contactar"].includes(lead.status) &&
-            targetCities.includes(lead.city)
-        )
+        .filter((lead) => !isDiscarded(lead) && targetCities.includes(lead.city))
         .slice()
         .sort((a, b) => b.score - a.score)
         .map((lead, index) => ({
           ...lead,
           visitOrder: index + 1,
-          routeReason:
-            lead.score >= 80
-              ? "Alta demanda + hueco digital claro"
-              : "Buena oportunidad para visita corta"
+          routeReason: lead.score >= 80 ? "Alta prioridad" : "Visita corta"
         })),
     [leadItems]
   );
-
-  function handleSelect(lead: Lead) {
-    setSelectedId(lead.id);
-    setDrawerOpen(true);
-  }
-
-  async function handleSaveLead(lead: Lead) {
-    const result = await persistLead(lead, accessToken);
-    setLeadItems(result.leads);
-    setDataSource(result.source);
-    setSyncMessage(result.source === "supabase" ? "Guardado en Supabase" : "Guardado en localStorage");
-    setSelectedId(result.lead.id);
-    setDrawerOpen(true);
-  }
-
-  async function handleStatusChange(lead: Lead, nextStatus: LeadStatus) {
-    const isDisqualified = ["No contactar", "No encaja", "Perdido"].includes(nextStatus);
-    await handleSaveLead({
-      ...lead,
-      status: nextStatus,
-      isDisqualified: isDisqualified || lead.isDisqualified,
-      validationStatus: isDisqualified ? "descartado" : lead.validationStatus,
-      updatedAt: new Date().toISOString()
-    });
-  }
-
-  async function handleNewLead() {
-    const lead = createBlankLead();
-    const result = await persistLead(lead, accessToken);
-    setLeadItems(result.leads);
-    setSelectedId(lead.id);
-    setDrawerOpen(true);
-    setDataSource(result.source);
-    setSyncMessage(result.source === "supabase" ? "Lead creado en Supabase" : "Lead creado localmente");
-  }
-
-  async function handleEnrich(lead: Lead) {
-    setEnrichingId(lead.id);
-
-    try {
-      const response = await fetch("/api/enrich", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ lead })
-      });
-      const enriched = (await response.json()) as EnrichResponse;
-
-      const nextLead = {
-        ...lead,
-        description: enriched.description || lead.description,
-        instagramUrl: enriched.instagramUrl || lead.instagramUrl,
-        facebookUrl: enriched.facebookUrl || lead.facebookUrl,
-        whatsappUrl: enriched.whatsappUrl || lead.whatsappUrl,
-        logoUrl: enriched.logoUrl || lead.logoUrl,
-        websiteTitle: enriched.websiteTitle || lead.websiteTitle,
-        lastRefreshedAt: new Date().toISOString()
-      };
-
-      await handleSaveLead(nextLead);
-      setSyncMessage(enriched.error ? `Enriquecimiento parcial: ${enriched.error}` : "Web/redes enriquecidas");
-    } catch (error) {
-      setSyncMessage(error instanceof Error ? error.message : "No se pudo enriquecer el lead");
-    } finally {
-      setEnrichingId("");
-    }
-  }
-
-  async function handleFindOwner(lead: Lead) {
-    if (!lead.placeId) return;
-    setFindingOwnerId(lead.id);
-
-    try {
-      const response = await fetch("/api/places/owner", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ placeId: lead.placeId, allowPaidRequests: true })
-      });
-      const payload = (await response.json()) as { candidates?: string[]; error?: string };
-
-      if (!response.ok) throw new Error(payload.error || "No se pudieron revisar reseñas");
-
-      const candidates = payload.candidates || [];
-      const nextLead = {
-        ...lead,
-        ownerName: lead.ownerName || candidates[0] || "",
-        reviewOwnerCandidates: candidates,
-        lastRefreshedAt: new Date().toISOString()
-      };
-      await handleSaveLead(nextLead);
-      setSyncMessage(candidates.length ? "Candidatos de dueño guardados" : "Sin dueño claro en reseñas");
-    } catch (error) {
-      setSyncMessage(error instanceof Error ? error.message : "No se pudieron revisar reseñas");
-    } finally {
-      setFindingOwnerId("");
-    }
-  }
-
-  async function handlePlacesImport(mode: "preview" | "import") {
-    setImportingPlaces(true);
-
-    try {
-      const response = await fetch("/api/places/import", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          city: city || "Castalla",
-          sector: sector || "Restaurantes",
-          mode,
-          allowPaidRequests: mode === "import",
-          maxRequests: 1,
-          pageSize: 10
-        })
-      });
-      const payload = (await response.json()) as {
-        mode?: string;
-        imported?: number;
-        leads?: Lead[];
-        message?: string;
-        error?: string;
-      };
-
-      if (!response.ok) throw new Error(payload.error || "No se pudo preparar la importación");
-
-      if (payload.leads?.length) {
-        setLeadItems(payload.leads);
-        setDataSource("supabase");
-      }
-
-      setPlacesMessage(
-        payload.imported
-          ? `${payload.imported} comercios importados con 1 petición Places`
-          : payload.message || "Plan de importación listo sin consumir Places"
-      );
-    } catch (error) {
-      setPlacesMessage(error instanceof Error ? error.message : "No se pudo preparar la importación");
-    } finally {
-      setImportingPlaces(false);
-    }
-  }
-
-  async function handleDuplicateScan() {
-    setCheckingDuplicates(true);
-
-    try {
-      const response = await fetch("/api/leads/duplicates", {
-        method: "POST",
-        headers: { authorization: `Bearer ${accessToken}` }
-      });
-      const payload = (await response.json()) as { saved?: number; groups?: Record<string, number>; error?: string };
-
-      if (!response.ok) throw new Error(payload.error || "No se pudieron detectar duplicados");
-
-      const groups = Object.entries(payload.groups || {})
-        .map(([reason, count]) => `${reason}: ${count}`)
-        .join(" · ");
-      setPlacesMessage(payload.saved ? `Duplicados pendientes guardados: ${groups}` : "Sin duplicados detectados");
-    } catch (error) {
-      setPlacesMessage(error instanceof Error ? error.message : "No se pudieron detectar duplicados");
-    } finally {
-      setCheckingDuplicates(false);
-    }
-  }
-
-  async function handleAddActivity(
-    lead: Lead,
-    activity: { type: string; result: string; nextAction: string; reminderAt: string }
-  ) {
-    const response = await fetch(`/api/leads/${lead.id}/crm`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify({ activity })
-    });
-    const payload = (await response.json()) as {
-      activities?: LeadActivity[];
-      tasks?: LeadTask[];
-      notes?: LeadNote[];
-      error?: string;
-    };
-
-    if (!response.ok) {
-      setSyncMessage(payload.error || "No se pudo registrar actividad");
-      return;
-    }
-
-    setLeadCrm({
-      activities: payload.activities || [],
-      tasks: payload.tasks || [],
-      notes: payload.notes || []
-    });
-
-    if (activity.nextAction || activity.reminderAt) {
-      await handleSaveLead({
-        ...lead,
-        nextAction: activity.nextAction,
-        nextFollowUpAt: activity.reminderAt,
-        nextFollowUpType: activity.type,
-        updatedAt: new Date().toISOString()
-      });
-    }
-
-    setSyncMessage("Actividad registrada");
-  }
-
-  async function handleConvertLead(lead: Lead) {
-    const response = await fetch(`/api/leads/${lead.id}/convert`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify({})
-    });
-    const payload = (await response.json()) as { lead?: Lead; error?: string };
-
-    if (!response.ok || !payload.lead) {
-      setSyncMessage(payload.error || "No se pudo convertir en cliente");
-      return;
-    }
-
-    const result = await persistLead(payload.lead, accessToken);
-    setLeadItems(result.leads);
-    setSelectedId(payload.lead.id);
-    setSyncMessage("Lead convertido en cliente");
-  }
 
   function clearFilters() {
     setQuery("");
@@ -492,365 +197,291 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     setMinScore(0);
   }
 
-  function handleSavedView(view: string) {
+  function handleQuickView(view: string) {
     clearFilters();
-    if (view === "priority") {
-      setMinScore(80);
-      setStatus("Prioritario");
-    }
+    if (view === "hot") setMinScore(80);
     if (view === "noInstagram") setWithoutInstagram(true);
     if (view === "noWeb") setWithoutWeb(true);
     if (view === "contactEasy") {
       setMinScore(60);
+      setWithoutPhone(false);
+    }
+    if (view === "discard") setStatus("No contactar");
+  }
+
+  function handleSelect(lead: Lead) {
+    setSelectedId((current) => (current === lead.id ? "" : lead.id));
+  }
+
+  async function handleSaveLead(lead: Lead) {
+    const result = await persistLead(lead, accessToken);
+    setLeadItems(result.leads);
+    setDataSource(result.source);
+    setSyncMessage(result.source === "supabase" ? "Guardado" : "Guardado local");
+    setSelectedId(result.lead.id);
+  }
+
+  async function handleStatusChange(lead: Lead, nextStatus: LeadStatus) {
+    const discard = ["No contactar", "No encaja", "Perdido"].includes(nextStatus);
+    await handleSaveLead({
+      ...lead,
+      status: nextStatus,
+      isInvalid: discard,
+      isDisqualified: discard,
+      validationStatus: discard ? "descartado" : "revisar",
+      manualOverride: !discard && (lead.isInvalid || lead.isDisqualified) ? true : lead.manualOverride,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  async function handleNewLead() {
+    const lead = createBlankLead();
+    const result = await persistLead(lead, accessToken);
+    setLeadItems(result.leads);
+    setSelectedId(result.lead.id);
+    setDataSource(result.source);
+    setSyncMessage(result.source === "supabase" ? "Lead creado" : "Lead local");
+  }
+
+  async function handleEnrich(lead: Lead) {
+    setEnrichingId(lead.id);
+    try {
+      const response = await fetch("/api/enrich", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ lead })
+      });
+      const enriched = (await response.json()) as EnrichResponse;
+      const nextLead = {
+        ...lead,
+        description: enriched.description || lead.description,
+        instagramUrl: enriched.instagramUrl || lead.instagramUrl,
+        facebookUrl: enriched.facebookUrl || lead.facebookUrl,
+        whatsappUrl: enriched.whatsappUrl || lead.whatsappUrl,
+        logoUrl: enriched.logoUrl || lead.logoUrl,
+        websiteTitle: enriched.websiteTitle || lead.websiteTitle,
+        lastRefreshedAt: new Date().toISOString()
+      };
+      await handleSaveLead(nextLead);
+      setSyncMessage(enriched.error ? `Parcial: ${enriched.error}` : "Enriquecido");
+    } catch (error) {
+      setSyncMessage(error instanceof Error ? error.message : "No se pudo enriquecer");
+    } finally {
+      setEnrichingId("");
     }
   }
 
-  const hotLeads = leadItems.filter((lead) => lead.score >= 80).length;
-  const openPipeline = leadItems.filter(
-    (lead) => !lead.isInvalid && !["Ganado", "Perdido", "No encaja", "No contactar"].includes(lead.status)
-  ).length;
-  const monthlyEstimate = leadItems.reduce((total, lead) => total + estimateWeightedMonthlyValue(lead), 0);
-  const missingInstagram = leadItems.filter((lead) => !lead.instagramUrl && !lead.isInvalid).length;
-  const dashboard = useMemo(() => {
-    const valid = leadItems.filter((lead) => !lead.isInvalid);
-    const now = new Date();
-    const newThisMonth = valid.filter((lead) => {
-      const created = new Date(lead.createdAt);
-      return created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth();
-    }).length;
-    const bySector = topGroups(valid, "sector");
-    const byCity = topGroups(valid, "city");
-    const won = valid.filter((lead) => lead.status === "Ganado").length;
-    const contacted = valid.filter((lead) =>
-      ["Contactado", "Respondió", "Reunión agendada", "Diagnóstico hecho", "Propuesta enviada", "Negociación", "Ganado"].includes(
-        lead.status
-      )
-    ).length;
+  async function handleFindOwner(lead: Lead) {
+    if (!lead.placeId) return;
+    setFindingOwnerId(lead.id);
+    try {
+      const response = await fetch("/api/places/owner", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ placeId: lead.placeId, allowPaidRequests: true })
+      });
+      const payload = (await response.json()) as { candidates?: string[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudieron revisar reseñas");
+      const candidates = payload.candidates || [];
+      await handleSaveLead({
+        ...lead,
+        ownerName: lead.ownerName || candidates[0] || "",
+        reviewOwnerCandidates: candidates,
+        lastRefreshedAt: new Date().toISOString()
+      });
+      setSyncMessage(candidates.length ? "Dueño guardado" : "Sin dueño claro");
+    } catch (error) {
+      setSyncMessage(error instanceof Error ? error.message : "No se pudo buscar dueño");
+    } finally {
+      setFindingOwnerId("");
+    }
+  }
 
-    return {
-      total: valid.length,
-      newThisMonth,
-      priority: valid.filter((lead) => lead.status === "Prioritario" || lead.priority === "Muy alta" || lead.score >= 80).length,
-      contacted,
-      meetings: valid.filter((lead) => lead.status === "Reunión agendada").length,
-      proposals: valid.filter((lead) => lead.status === "Propuesta enviada").length,
-      won,
-      conversion: contacted ? Math.round((won / contacted) * 100) : 0,
-      bySector,
-      byCity,
-      followUps: valid
-        .filter((lead) => lead.nextFollowUpAt)
-        .slice()
-        .sort((a, b) => String(a.nextFollowUpAt).localeCompare(String(b.nextFollowUpAt)))
-        .slice(0, 5)
-    };
-  }, [leadItems]);
+  async function handleAddActivity(lead: Lead, activity: { type: string; result: string; nextAction: string; reminderAt: string }) {
+    const response = await fetch(`/api/leads/${lead.id}/crm`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ activity })
+    });
+    const payload = (await response.json()) as { activities?: LeadActivity[]; tasks?: LeadTask[]; notes?: LeadNote[]; error?: string };
+    if (!response.ok) {
+      setSyncMessage(payload.error || "No se pudo registrar");
+      return;
+    }
+    setLeadCrm({ activities: payload.activities || [], tasks: payload.tasks || [], notes: payload.notes || [] });
+    if (activity.nextAction || activity.reminderAt) {
+      await handleSaveLead({
+        ...lead,
+        nextAction: activity.nextAction,
+        nextFollowUpAt: activity.reminderAt,
+        nextFollowUpType: activity.type,
+        updatedAt: new Date().toISOString()
+      });
+    }
+    setSyncMessage("Actividad registrada");
+  }
 
-  const drawer = drawerOpen ? (
-    selectedLead ? (
+  async function handleConvertLead(lead: Lead) {
+    const response = await fetch(`/api/leads/${lead.id}/convert`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({})
+    });
+    const payload = (await response.json()) as { lead?: Lead; error?: string };
+    if (!response.ok || !payload.lead) {
+      setSyncMessage(payload.error || "No se pudo convertir");
+      return;
+    }
+    const result = await persistLead(payload.lead, accessToken);
+    setLeadItems(result.leads);
+    setSelectedId(payload.lead.id);
+    setSyncMessage("Cliente creado");
+  }
+
+  async function handleRouteVisited(stops: RouteStop[]) {
+    for (const stop of stops) {
+      await handleSaveLead({
+        ...stop,
+        status: stop.status === "Detectado" || stop.status === "Validado" ? "Contactado" : stop.status,
+        lastContact: "Visitado",
+        nextAction: "Seguimiento",
+        nextFollowUpAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+    setSyncMessage(`${stops.length} visitados`);
+  }
+
+  function renderDetail(lead: Lead) {
+    return (
       <LeadDetail
-        lead={selectedLead}
+        lead={lead}
         statuses={statuses}
+        variant="inline"
         onSave={handleSaveLead}
         onEnrich={handleEnrich}
         onFindOwner={handleFindOwner}
         onAddActivity={handleAddActivity}
         onConvert={handleConvertLead}
-        onClose={() => setDrawerOpen(false)}
-        activities={leadCrm.activities}
-        tasks={leadCrm.tasks}
-        notes={leadCrm.notes}
-        enriching={enrichingId === selectedLead.id}
-        findingOwner={findingOwnerId === selectedLead.id}
+        onClose={() => setSelectedId("")}
+        activities={selectedId === lead.id ? leadCrm.activities : []}
+        tasks={selectedId === lead.id ? leadCrm.tasks : []}
+        notes={selectedId === lead.id ? leadCrm.notes : []}
+        enriching={enrichingId === lead.id}
+        findingOwner={findingOwnerId === lead.id}
       />
-    ) : (
-      <aside className="lead-detail lead-detail--empty">
-        <button className="drawer-close" type="button" onClick={() => setDrawerOpen(false)} aria-label="Cerrar ficha">
-          ×
-        </button>
-        <span className="eyebrow">Ficha comercial</span>
-        <h2>Selecciona un comercio</h2>
-        <p>Abre una card para ver contacto, diagnóstico, mensajes y seguimiento.</p>
-      </aside>
-    )
-  ) : null;
+    );
+  }
 
   return (
     <main className="app">
       <Background />
-      <AppShell
-        currentView={shellView(initialView)}
-        userLabel={`${profile.role} · ${profile.email}`}
-        sourceLabel={dataSource === "supabase" ? "Supabase activo" : syncMessage}
-      >
-        <header className="workspace-header">
+      <AppShell currentView={initialView} userLabel={`${profile.role} · ${profile.email}`} sourceLabel={dataSource === "supabase" ? "Activo" : syncMessage}>
+        <header className="workspace-header workspace-header--compact">
           <div>
-            <p className="eyebrow">Leads Firekworks</p>
+            <p className="eyebrow">Firekworks Leads</p>
             <h1>{viewTitle(initialView)}</h1>
-            <p className="workspace-subtitle">{viewSubtitle(initialView)}</p>
           </div>
           <div className="header-actions">
-            <span className="source-pill source-pill--supabase">
-              {profile.role} · {profile.email}
-            </span>
             <span className={`source-pill source-pill--${dataSource}`}>{syncMessage}</span>
-            <button className="button button--ghost" type="button" onClick={() => exportLeadsToCsv(filteredLeads)}>
-              Exportar CSV
-            </button>
-            <button className="button button--ghost" type="button" onClick={signOut}>
-              Salir
-            </button>
-            <button className="button" type="button" onClick={handleNewLead}>
-              <span className="css-icon css-icon--plus" />
-              Nuevo lead
-            </button>
+            {initialView === "leads" ? (
+              <>
+                <button className="button button--ghost" type="button" onClick={() => exportLeadsToCsv(filteredLeads)}>CSV</button>
+                <button className="button" type="button" onClick={handleNewLead}>
+                  <span className="css-icon css-icon--plus" />
+                  Nuevo
+                </button>
+              </>
+            ) : null}
           </div>
         </header>
 
-        <section className="stat-strip" aria-label="Resumen principal">
-          <article className="stat-card stat-card--base">
-            <span className="css-icon css-icon--store" aria-hidden="true" />
-            <span>Leads activos</span>
-            <strong>{openPipeline}</strong>
-          </article>
-          <article className="stat-card stat-card--hot">
-            <span className="css-icon css-icon--flame" aria-hidden="true" />
-            <span>Prioritarios calientes</span>
-            <strong>{hotLeads}</strong>
-          </article>
-          <article className="stat-card stat-card--gap">
-            <span className="css-icon css-icon--instagram" aria-hidden="true" />
-            <span>Sin Instagram</span>
-            <strong>{missingInstagram}</strong>
-          </article>
-          <article className="stat-card stat-card--money">
-            <span className="css-icon css-icon--euro" aria-hidden="true" />
-            <span>Previsión mensual</span>
-            <strong>≈ {monthlyEstimate}€</strong>
-          </article>
-        </section>
-
-        <details className="metrics-disclosure">
-          <summary>Ver más métricas</summary>
-          <section className="dashboard-grid" aria-label="Dashboard interno">
-            <article>
-              <span>Nuevos mes</span>
-              <strong>{dashboard.newThisMonth}</strong>
-            </article>
-            <article>
-              <span>Prioritarios</span>
-              <strong>{dashboard.priority}</strong>
-            </article>
-            <article>
-              <span>Contactados</span>
-              <strong>{dashboard.contacted}</strong>
-            </article>
-            <article>
-              <span>Reuniones</span>
-              <strong>{dashboard.meetings}</strong>
-            </article>
-            <article>
-              <span>Propuestas</span>
-              <strong>{dashboard.proposals}</strong>
-            </article>
-            <article>
-              <span>Ganados</span>
-              <strong>{dashboard.won}</strong>
-            </article>
-            <article>
-              <span>Conversión</span>
-              <strong>{dashboard.conversion}%</strong>
-            </article>
-            <article className="dashboard-grid__wide">
-              <span>Sectores con potencial</span>
-              <strong>{dashboard.bySector.map(([name, count]) => `${name} ${count}`).join(" · ")}</strong>
-            </article>
-            <article className="dashboard-grid__wide">
-              <span>Ciudades</span>
-              <strong>{dashboard.byCity.map(([name, count]) => `${name} ${count}`).join(" · ")}</strong>
-            </article>
-            <article className="dashboard-grid__wide">
-              <span>Próximos seguimientos</span>
-              <strong>
-                {dashboard.followUps.length
-                  ? dashboard.followUps.map((lead) => `${lead.name} · ${new Date(lead.nextFollowUpAt || "").toLocaleDateString("es-ES")}`).join(" · ")
-                  : "Sin seguimientos"}
-              </strong>
-            </article>
-          </section>
-        </details>
-
         <AnimatePresence mode="wait">
-          {initialView === "radar" || initialView === "leads" || initialView === "discarded" ? (
-            <motion.section
-              key={initialView}
-              className={drawerOpen ? "radar-layout workspace-layout--drawer" : "radar-layout"}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.22 }}
-            >
-              <div className="radar-main">
-                <Filters
-                  cities={cities}
-                  sectors={sectors}
-                  statuses={statuses}
-                  followersBuckets={followersBuckets}
-                  contentUses={contentUses}
-                  query={query}
-                  city={city}
-                  sector={sector}
-                  status={status}
-                  followersBucket={followersBucket}
-                  contentUse={contentUse}
-                  withoutInstagram={withoutInstagram}
-                  withoutFacebook={withoutFacebook}
-                  withoutWeb={withoutWeb}
-                  withoutWhatsapp={withoutWhatsapp}
-                  withoutPhone={withoutPhone}
-                  minScore={minScore}
-                  savedViews={savedViews}
-                  onQuery={setQuery}
-                  onCity={setCity}
-                  onSector={setSector}
-                  onStatus={setStatus}
-                  onFollowersBucket={setFollowersBucket}
-                  onContentUse={setContentUse}
-                  onWithoutInstagram={setWithoutInstagram}
-                  onWithoutFacebook={setWithoutFacebook}
-                  onWithoutWeb={setWithoutWeb}
-                  onWithoutWhatsapp={setWithoutWhatsapp}
-                  onWithoutPhone={setWithoutPhone}
-                  onMinScore={setMinScore}
-                  onSavedView={handleSavedView}
-                />
+          {initialView === "pulse" ? (
+            <motion.section key="pulse" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <PulseDashboard leads={leadItems} onSelect={handleSelect} />
+              {selectedLead ? <div className="pulse-inline-detail">{renderDetail(selectedLead)}</div> : null}
+            </motion.section>
+          ) : null}
 
-                {initialView === "discarded" ? (
-                  <div className="discarded-summary">
-                    <span className="css-icon css-icon--ban" aria-hidden="true" />
-                    <div>
-                      <strong>Revisa, recupera o confirma descartes</strong>
-                      <p>Los registros siguen en Supabase y mantienen motivo, categoría y auditoría.</p>
+          {initialView === "leads" ? (
+            <motion.section key="leads" className="queue-layout" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <Filters
+                cities={cities}
+                sectors={sectors}
+                statuses={statuses}
+                followersBuckets={followersBuckets}
+                contentUses={contentUses}
+                query={query}
+                city={city}
+                sector={sector}
+                status={status}
+                followersBucket={followersBucket}
+                contentUse={contentUse}
+                withoutInstagram={withoutInstagram}
+                withoutFacebook={withoutFacebook}
+                withoutWeb={withoutWeb}
+                withoutWhatsapp={withoutWhatsapp}
+                withoutPhone={withoutPhone}
+                minScore={minScore}
+                savedViews={quickViews}
+                onQuery={setQuery}
+                onCity={setCity}
+                onSector={setSector}
+                onStatus={setStatus}
+                onFollowersBucket={setFollowersBucket}
+                onContentUse={setContentUse}
+                onWithoutInstagram={setWithoutInstagram}
+                onWithoutFacebook={setWithoutFacebook}
+                onWithoutWeb={setWithoutWeb}
+                onWithoutWhatsapp={setWithoutWhatsapp}
+                onWithoutPhone={setWithoutPhone}
+                onMinScore={setMinScore}
+                onSavedView={handleQuickView}
+              />
+
+              <div className="lead-list lead-list--queue">
+                {filteredLeads.length ? (
+                  <>
+                    <div className="list-status">
+                      <span>{visibleLeads.length} de {filteredLeads.length}</span>
+                      {visibleLeads.length < filteredLeads.length ? (
+                        <button type="button" onClick={() => setVisibleLeadCount((current) => current + PAGE_SIZE)}>Ver más</button>
+                      ) : null}
                     </div>
-                  </div>
-                ) : null}
-
-                {initialView !== "discarded" ? (
-                <details className="import-strip">
-                  <summary>
-                    <strong>Importación zona</strong>
-                    <span>{placesMessage}</span>
-                  </summary>
-                  <div className="import-strip__actions">
-                    <button
-                      className="button button--ghost"
-                      type="button"
-                      onClick={() => handlePlacesImport("preview")}
-                      disabled={importingPlaces}
-                    >
-                      Plan sin coste
-                    </button>
-                    <button
-                      className="button button--quiet"
-                      type="button"
-                      onClick={() => handlePlacesImport("import")}
-                      disabled={importingPlaces}
-                    >
-                      Importar 1 búsqueda
-                    </button>
-                    <button
-                      className="button button--ghost"
-                      type="button"
-                      onClick={handleDuplicateScan}
-                      disabled={checkingDuplicates}
-                    >
-                      {checkingDuplicates ? "Revisando" : "Duplicados"}
-                    </button>
-                  </div>
-                </details>
-                ) : null}
-
-                <div className="lead-list">
-                  {filteredLeads.length ? (
-                    <>
-                      <div className="list-status">
-                        <span>
-                          Mostrando {visibleLeads.length} de {filteredLeads.length}
-                        </span>
-                        {visibleLeads.length < filteredLeads.length ? (
-                          <button
-                            type="button"
-                            onClick={() => setVisibleLeadCount((current) => current + RADAR_PAGE_SIZE)}
-                          >
-                            Ver más
-                          </button>
-                        ) : null}
+                    {visibleLeads.map((lead) => (
+                      <div className="lead-row-shell" key={lead.id}>
+                        <LeadCard lead={lead} active={lead.id === selectedId} onSelect={handleSelect} />
+                        {lead.id === selectedId ? renderDetail(lead) : null}
                       </div>
-                      {visibleLeads.map((lead) => (
-                        <LeadCard
-                          key={lead.id}
-                          lead={lead}
-                          active={lead.id === selectedLead?.id}
-                          onSelect={handleSelect}
-                        />
-                      ))}
-                    </>
-                  ) : (
-                    <div className="empty-panel">
-                      <strong>{initialView === "discarded" ? "No hay descartados con esos filtros" : "No hay leads con esos filtros"}</strong>
-                      <span>Prueba otra ciudad, sector, señal o score.</span>
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </>
+                ) : (
+                  <div className="empty-panel">
+                    <strong>Sin resultados</strong>
+                    <span>Ajusta filtros o ejecuta Scan.</span>
+                  </div>
+                )}
               </div>
-
-              {drawer}
             </motion.section>
           ) : null}
 
           {initialView === "pipeline" ? (
-            <motion.section
-              key="pipeline"
-              className="board-view"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.22 }}
-            >
-              <div className="view-intro">
-                <span>Estados comerciales</span>
-                <p>Arrastra comercios entre estados y conserva cada avance en su ficha.</p>
-              </div>
-              <div className={drawerOpen ? "pipeline-layout workspace-layout--drawer" : "pipeline-layout"}>
-                <PipelineBoard
-                  leads={leadItems}
-                  statuses={statuses}
-                  selectedId={selectedLead?.id || ""}
-                  onSelect={handleSelect}
-                  onStatusChange={handleStatusChange}
-                />
-                {drawer}
-              </div>
+            <motion.section key="pipeline" className="board-view" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <PipelineBoard
+                leads={leadItems}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+                onStatusChange={handleStatusChange}
+                renderDetail={renderDetail}
+              />
             </motion.section>
           ) : null}
 
-          {initialView === "ruta" ? (
-            <motion.section
-              key="ruta"
-              className="route-view"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.22 }}
-            >
-              <div className="view-intro">
-                <span>Ruta presencial</span>
-                <p>Orden pensado por ciudad, temperatura y facilidad de visita.</p>
-              </div>
-              <div className={drawerOpen ? "route-layout workspace-layout--drawer" : "route-layout"}>
-                <RoutePlanner stops={routeStops} onSelect={handleSelect} />
-                {drawer}
-              </div>
+          {initialView === "route" ? (
+            <motion.section key="route" className="route-view" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <RoutePlanner stops={routeStops} onSelect={handleSelect} onMarkVisited={handleRouteVisited} />
+              {selectedLead ? <div className="route-inline-detail">{renderDetail(selectedLead)}</div> : null}
             </motion.section>
           ) : null}
         </AnimatePresence>
@@ -860,38 +491,16 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 }
 
 function viewTitle(view: LeadsWorkspaceProps["initialView"]) {
-  if (view === "radar") return "Inicio";
-  if (view === "leads") return "Leads comerciales";
-  if (view === "pipeline") return "Pipeline comercial";
-  if (view === "ruta") return "Ruta de visitas";
-  if (view === "discarded") return "Descartados";
+  if (view === "pulse") return "Pulse";
+  if (view === "pipeline") return "Pipeline";
+  if (view === "route") return "Ruta";
   return "Leads";
-}
-
-function viewSubtitle(view: LeadsWorkspaceProps["initialView"]) {
-  if (view === "radar") return "Pulso comercial, prioridad y previsión mensual sin ruido.";
-  if (view === "discarded") return "Registros no válidos, no encaja o no contactar, siempre recuperables.";
-  if (view === "pipeline") return "Avanza o retrocede comercios y deja cada fase guardada.";
-  if (view === "ruta") return "Prioriza visitas presenciales por ciudad, temperatura y hueco digital.";
-  return "Filtra, abre fichas y decide la siguiente acción con rapidez.";
-}
-
-function shellView(view: LeadsWorkspaceProps["initialView"]) {
-  if (view === "discarded") return "descartados";
-  return view;
 }
 
 function uniqueOptions(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b, "es"));
 }
 
-function topGroups(leads: Lead[], key: "sector" | "city") {
-  const counts = leads.reduce<Record<string, number>>((acc, lead) => {
-    acc[lead[key]] = (acc[lead[key]] || 0) + 1;
-    return acc;
-  }, {});
-
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4);
+function isDiscarded(lead: Lead) {
+  return lead.isInvalid || Boolean(lead.isDisqualified) || ["No contactar", "No encaja", "Perdido"].includes(lead.status);
 }

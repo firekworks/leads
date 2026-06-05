@@ -120,6 +120,8 @@ export function createBlankLead(): Lead {
     isDisqualified: false,
     disqualifiedReason: "",
     disqualifiedCategory: "",
+    fitClassification: "unknown",
+    manualOverride: false,
     validationStatus: "pendiente",
     instagramStatus: "pendiente",
     enrichmentStatus: "pendiente",
@@ -159,6 +161,7 @@ export function createBlankLead(): Lead {
     scorePotencialMensualidad: 0,
     scorePrioridadVisita: 0,
     scoreExplanation: [],
+    scoreTags: [],
     signals: {
       web: false,
       instagram: false,

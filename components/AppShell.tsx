@@ -4,26 +4,25 @@ import type { ReactNode } from "react";
 
 type AppShellProps = {
   children: ReactNode;
-  currentView: "radar" | "leads" | "pipeline" | "ruta" | "importar" | "descartados" | "textos";
+  currentView: "pulse" | "leads" | "pipeline" | "route" | "scan" | "admin";
   userLabel?: string;
   sourceLabel?: string;
 };
 
 const navItems = [
-  { href: "/", id: "radar", label: "Inicio", icon: "home" },
+  { href: "/pulse", id: "pulse", label: "Pulse", icon: "pulse" },
   { href: "/leads", id: "leads", label: "Leads", icon: "store" },
   { href: "/pipeline", id: "pipeline", label: "Pipeline", icon: "pipeline" },
-  { href: "/ruta", id: "ruta", label: "Ruta", icon: "route" },
-  { href: "/import/socials", id: "importar", label: "Importar", icon: "upload" },
-  { href: "/descartados", id: "descartados", label: "Descartados", icon: "ban" },
-  { href: "/admin/settings/texts", id: "textos", label: "Ajustes", icon: "settings" }
+  { href: "/route", id: "route", label: "Ruta", icon: "route" },
+  { href: "/scan", id: "scan", label: "Scan", icon: "scan" },
+  { href: "/admin", id: "admin", label: "Admin", icon: "settings" }
 ] as const;
 
 export function AppShell({ children, currentView, userLabel, sourceLabel }: AppShellProps) {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <Link href="/" className="brand">
+        <Link href="/pulse" className="brand">
           <span className="brand__mark">
             <Image src="/firekworks-icon.png" width={22} height={32} alt="" priority />
           </span>
@@ -47,8 +46,8 @@ export function AppShell({ children, currentView, userLabel, sourceLabel }: AppS
         </nav>
 
         <div className="sidebar__note">
-          <span>Sistema</span>
-          <strong>{sourceLabel || "Supabase activo"}</strong>
+          <span>Interno</span>
+          <strong>{sourceLabel || "Activo"}</strong>
           {userLabel ? <small>{userLabel}</small> : null}
         </div>
       </aside>

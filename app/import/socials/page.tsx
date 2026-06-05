@@ -1,10 +1,5 @@
-import { AuthGate } from "@/components/AuthGate";
-import { SocialImportWorkspace } from "@/components/SocialImportWorkspace";
+import { redirect } from "next/navigation";
 
-export default function SocialImportPage() {
-  return (
-    <AuthGate>
-      <SocialImportWorkspace />
-    </AuthGate>
-  );
+export default function LegacyImportPage() {
+  redirect("/scan");
 }

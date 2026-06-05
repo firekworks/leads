@@ -7,7 +7,7 @@ import { useInternalAuth } from "@/components/AuthGate";
 
 type AppText = {
   id?: string;
-  app: "web" | "radar" | "leads" | "stats";
+  app: "leads";
   key: string;
   value: string;
   description: string;
@@ -16,7 +16,7 @@ type AppText = {
   updated_at?: string;
 };
 
-const apps: AppText["app"][] = ["leads", "stats", "radar", "web"];
+const apps: AppText["app"][] = ["leads"];
 
 export function TextsAdmin() {
   const { accessToken, profile } = useInternalAuth();
@@ -49,6 +49,7 @@ export function TextsAdmin() {
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return texts.filter((text) => {
+      if (text.app !== "leads") return false;
       const matchesApp = app ? text.app === app : true;
       const haystack = `${text.app} ${text.key} ${text.category} ${text.description} ${text.value}`.toLowerCase();
       return matchesApp && (!needle || haystack.includes(needle));
@@ -88,10 +89,10 @@ export function TextsAdmin() {
   return (
     <main className="app">
       <Background />
-      <AppShell currentView="textos">
+      <AppShell currentView="admin">
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">Ajustes internos</p>
+            <p className="eyebrow">Admin</p>
             <h1>Textos</h1>
             <p className="workspace-subtitle">Copys compartidos para productos Firekworks con fallback seguro.</p>
           </div>

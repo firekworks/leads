@@ -1,10 +1,5 @@
-import { AuthGate } from "@/components/AuthGate";
-import { LeadsWorkspace } from "@/components/LeadsWorkspace";
+import { redirect } from "next/navigation";
 
-export default function LeadsPage() {
-  return (
-    <AuthGate>
-      <LeadsWorkspace initialView="radar" />
-    </AuthGate>
-  );
+export default function HomePage() {
+  redirect("/pulse");
 }

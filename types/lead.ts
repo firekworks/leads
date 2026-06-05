@@ -37,6 +37,17 @@ export type LeadSource = "manual" | "google_places" | "importado" | "web";
 export type ValidationStatus = "pendiente" | "validado" | "descartado" | "duplicado" | "revisar";
 export type InstagramStatus = "pendiente" | "encontrado" | "sin_cuenta" | "manual" | "revisar";
 export type EnrichmentStatus = "pendiente" | "parcial" | "completo" | "error";
+export type FitClassification =
+  | "valid_client_candidate"
+  | "public_entity"
+  | "tourism_public"
+  | "healthcare_public"
+  | "education_public"
+  | "emergency_service"
+  | "government"
+  | "duplicate"
+  | "low_fit"
+  | "unknown";
 
 export type LeadSignals = {
   web: boolean;
@@ -75,6 +86,8 @@ export type Lead = {
   isDisqualified?: boolean;
   disqualifiedReason?: string;
   disqualifiedCategory?: string;
+  fitClassification?: FitClassification;
+  manualOverride?: boolean;
   validationStatus?: ValidationStatus;
   instagramStatus?: InstagramStatus;
   enrichmentStatus?: EnrichmentStatus;
@@ -115,6 +128,7 @@ export type Lead = {
   scorePotencialMensualidad?: number;
   scorePrioridadVisita?: number;
   scoreExplanation?: string[];
+  scoreTags?: string[];
   signals: LeadSignals;
   adsSignal?: string;
   dataQuality?: Record<string, unknown>;

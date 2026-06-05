@@ -1,10 +1,5 @@
-import { AuthGate } from "@/components/AuthGate";
-import { LeadsWorkspace } from "@/components/LeadsWorkspace";
+import { redirect } from "next/navigation";
 
-export default function DiscardedLeadsPage() {
-  return (
-    <AuthGate>
-      <LeadsWorkspace initialView="discarded" />
-    </AuthGate>
-  );
+export default function LegacyDiscardedPage() {
+  redirect("/pipeline");
 }

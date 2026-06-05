@@ -5,8 +5,7 @@ import type { Lead, LeadSector } from "@/types/lead";
 
 export const dynamic = "force-dynamic";
 
-const FOIA_CITIES = ["Castalla", "Ibi", "Onil", "Biar", "Tibi", "Elda", "Petrer", "Villena"];
-const EXCLUDED_TERMS = ["alcoy", "alcoi", "alicante"];
+const SCAN_CITIES = ["Castalla", "Ibi", "Onil", "Alcoy", "Biar", "Tibi", "Elda", "Petrer", "Villena", "Alicante", "Valencia"];
 type CityViewport = {
   low: { latitude: number; longitude: number };
   high: { latitude: number; longitude: number };
@@ -44,6 +43,18 @@ const CITY_VIEWPORTS: Record<string, CityViewport> = {
   Villena: {
     low: { latitude: 38.58, longitude: -0.94 },
     high: { latitude: 38.68, longitude: -0.82 }
+  },
+  Alcoy: {
+    low: { latitude: 38.66, longitude: -0.54 },
+    high: { latitude: 38.74, longitude: -0.43 }
+  },
+  Alicante: {
+    low: { latitude: 38.30, longitude: -0.56 },
+    high: { latitude: 38.40, longitude: -0.40 }
+  },
+  Valencia: {
+    low: { latitude: 39.41, longitude: -0.46 },
+    high: { latitude: 39.53, longitude: -0.28 }
   }
 };
 const DEFAULT_TYPES: LeadSector[] = [
@@ -111,7 +122,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as PlacesImportRequest;
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  const city = FOIA_CITIES.includes(body.city || "") ? body.city! : "Castalla";
+  const city = SCAN_CITIES.includes(body.city || "") ? body.city! : "Castalla";
   const sector = body.sector || "comercios";
   const maxRequests = Math.max(0, Math.min(Number(body.maxRequests || 1), 3));
   const pageSize = Math.max(5, Math.min(Number(body.pageSize || 10), 20));
@@ -122,8 +133,7 @@ export async function POST(request: Request) {
       ok: true,
       mode: "safe_preview",
       estimatedRequests: maxRequests || 1,
-      includedCities: FOIA_CITIES,
-      excluded: ["Alcoy", "Alicante"],
+      includedCities: SCAN_CITIES,
       message: "No se han hecho peticiones a Google Places. Activa allowPaidRequests para ejecutar una búsqueda limitada."
     });
   }
@@ -295,7 +305,7 @@ async function searchPlacesPage({
       ].join(",")
     },
     body: JSON.stringify({
-      textQuery: `${query}, ${city}, Alicante, España`,
+      textQuery: `${query}, ${city}, España`,
       pageSize,
       ...(pageToken ? { pageToken } : {}),
       locationRestriction: {
@@ -327,8 +337,8 @@ function uniqueByPlaceId(places: GooglePlace[]) {
 }
 
 function isAllowedPlace(place: GooglePlace, city: string) {
-  const haystack = `${place.formattedAddress || ""} ${place.displayName?.text || ""}`.toLowerCase();
-  return haystack.includes(city.toLowerCase()) && !EXCLUDED_TERMS.some((term) => haystack.includes(term));
+  const haystack = normalizeForPlace(`${place.formattedAddress || ""} ${place.displayName?.text || ""}`);
+  return haystack.includes(normalizeForPlace(city));
 }
 
 function placeToLead(place: GooglePlace, city: string, sector: string): Lead {
@@ -374,7 +384,7 @@ function placeToLead(place: GooglePlace, city: string, sector: string): Lead {
     priority: reviews >= 100 && rating >= 4.3 ? "Alta" : "Media",
     potential: estimatePotential(inferredSector, reviews, rating),
     lastContact: "Sin contacto",
-    nextAction: "Validar Instagram, Facebook y contacto directo",
+    nextAction: "Validar IG",
     pain: "",
     diagnosis: "",
     signals: {
@@ -388,6 +398,13 @@ function placeToLead(place: GooglePlace, city: string, sector: string): Lead {
     createdAt: now,
     updatedAt: now
   });
+}
+
+function normalizeForPlace(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function mergeImportedLead(existing: Lead | undefined, incoming: Lead) {

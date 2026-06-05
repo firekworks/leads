@@ -14,6 +14,7 @@ type LeadCardProps = {
 export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
   const initial = lead.name.trim().slice(0, 1).toUpperCase() || "F";
   const temperature = scoreLabel(lead.score);
+  const tags = (lead.scoreTags || []).slice(0, 3);
 
   return (
     <motion.button
@@ -45,14 +46,13 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
         <small>
           {lead.city} · {lead.sector}
         </small>
-        <span className="lead-card__description">{lead.nextAction || lead.problemDetected || lead.pain || "Validar encaje comercial"}</span>
-        <span className="channel-icons" aria-label="Canales detectados">
-          <ChannelIcon icon="instagram" label="Instagram" active={Boolean(lead.instagramUrl || lead.signals.instagram)} />
-          <ChannelIcon icon="facebook" label="Facebook" active={Boolean(lead.facebookUrl || lead.signals.facebook)} />
-          <ChannelIcon icon="web" label="Web" active={Boolean(lead.website || lead.signals.web)} />
-          <ChannelIcon icon="whatsapp" label="WhatsApp" active={Boolean(lead.whatsappUrl || lead.signals.whatsapp)} />
-          <ChannelIcon icon="phone" label="Teléfono" active={Boolean(lead.phone)} />
-          <ChannelIcon icon="maps" label="Maps" active={Boolean(lead.googleMapsUrl || lead.signals.googleProfile)} />
+        <span className="lead-card__signals" aria-label="Señales rápidas">
+          <SignalChip icon="instagram" label="IG" active={Boolean(lead.instagramUrl || lead.signals.instagram)} />
+          <SignalChip icon="facebook" label="FB" active={Boolean(lead.facebookUrl || lead.signals.facebook)} />
+          <SignalChip icon="web" label="Web" active={Boolean(lead.website || lead.signals.web)} />
+          <SignalChip icon="phone" label="Tel" active={Boolean(lead.phone || lead.whatsappUrl || lead.signals.whatsapp)} />
+          <SignalChip icon="maps" label="Maps" active={Boolean(lead.googleMapsUrl || lead.signals.googleProfile)} />
+          <SignalChip icon="star" label={`${lead.reviews || 0}`} active={lead.reviews > 0} />
         </span>
       </span>
 
@@ -61,29 +61,47 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
           <strong>{lead.score}</strong>
           <small>{temperature}</small>
         </span>
-        <span className="meta-chip">IG {lead.followersBucket}</span>
-        <span className="meta-chip meta-chip--content">{lead.contentUse}</span>
+        <span className="lead-card__chips">
+          <span className="meta-chip">{quickAction(lead)}</span>
+          <span className="meta-chip">IG {lead.followersBucket}</span>
+          <span className="meta-chip meta-chip--content">{lead.contentUse}</span>
+          {tags.map((tag) => (
+            <span className="meta-chip meta-chip--quiet" key={tag}>{tag}</span>
+          ))}
+        </span>
       </span>
     </motion.button>
   );
 }
 
-function ChannelIcon({
+function SignalChip({
   icon,
   label,
   active
 }: {
-  icon: "instagram" | "facebook" | "web" | "whatsapp" | "phone" | "maps";
+  icon: "instagram" | "facebook" | "web" | "phone" | "maps" | "star";
   label: string;
   active: boolean;
 }) {
   return (
     <span
-      className={active ? `channel-icon channel-icon--${icon} channel-icon--active` : `channel-icon channel-icon--${icon}`}
+      className={active ? `signal-chip signal-chip--${icon} signal-chip--active` : `signal-chip signal-chip--${icon}`}
       title={active ? label : `${label}: no detectado`}
       aria-label={active ? label : `${label} no detectado`}
     >
       <span className={`css-icon css-icon--${icon}`} aria-hidden="true" />
+      {label}
     </span>
   );
+}
+
+function quickAction(lead: Lead) {
+  if (lead.isInvalid || lead.isDisqualified || lead.status === "No contactar") return "Revisar descarte";
+  if (!lead.instagramUrl) return "Validar IG";
+  if (!lead.phone && !lead.whatsappUrl) return "Buscar tel";
+  if (lead.status === "Detectado" || lead.status === "Validado") return "Priorizar";
+  if (lead.status === "Contactado") return "Seguimiento";
+  if (lead.status === "Respondió") return "Reunión";
+  if (lead.status === "Propuesta enviada" || lead.status === "Negociación") return "Cerrar";
+  return lead.nextAction ? lead.nextAction.slice(0, 18) : "Revisar";
 }

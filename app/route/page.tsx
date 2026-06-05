@@ -1,10 +1,10 @@
 import { AuthGate } from "@/components/AuthGate";
 import { LeadsWorkspace } from "@/components/LeadsWorkspace";
 
-export default function LeadPage() {
+export default function RoutePage() {
   return (
     <AuthGate>
-      <LeadsWorkspace initialView="leads" />
+      <LeadsWorkspace initialView="route" />
     </AuthGate>
   );
 }

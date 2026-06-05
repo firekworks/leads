@@ -1,111 +1,185 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RouteStop } from "@/types/lead";
+import { scoreLabel, scoreTone } from "@/lib/scoring";
 
 type RoutePlannerProps = {
   stops: RouteStop[];
   onSelect: (lead: RouteStop) => void;
+  onMarkVisited?: (leads: RouteStop[]) => void;
 };
 
-const ROUTE_PAGE_SIZE = 80;
-const CITY_POSITIONS: Record<string, { x: number; y: number }> = {
-  Villena: { x: 10, y: 18 },
-  Biar: { x: 18, y: 34 },
-  Elda: { x: 28, y: 68 },
-  Petrer: { x: 34, y: 64 },
-  Onil: { x: 40, y: 54 },
-  Castalla: { x: 47, y: 44 },
-  Ibi: { x: 66, y: 52 },
-  Tibi: { x: 76, y: 76 }
-};
-const MAP_BOUNDS = {
-  minLat: 38.42,
-  maxLat: 38.68,
-  minLng: -0.95,
-  maxLng: -0.52
-};
+const ROUTE_PAGE_SIZE = 70;
 
-export function RoutePlanner({ stops, onSelect }: RoutePlannerProps) {
+export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerProps) {
+  const [city, setCity] = useState("");
+  const [temperature, setTemperature] = useState("");
   const [visibleCount, setVisibleCount] = useState(ROUTE_PAGE_SIZE);
-  const visibleStops = stops.slice(0, visibleCount);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const cities = useMemo(() => Array.from(new Set(stops.map((stop) => stop.city))).sort((a, b) => a.localeCompare(b, "es")), [stops]);
+
+  const filteredStops = useMemo(() => {
+    return stops.filter((stop) => {
+      const matchesCity = city ? stop.city === city : true;
+      const label = scoreLabel(stop.score);
+      const matchesTemperature = temperature ? label === temperature : true;
+      return matchesCity && matchesTemperature && !stop.isInvalid && !stop.isDisqualified;
+    });
+  }, [city, stops, temperature]);
+
+  const visibleStops = filteredStops.slice(0, visibleCount);
+  const selectedStops = selectedIds
+    .map((id) => stops.find((stop) => stop.id === id))
+    .filter(Boolean) as RouteStop[];
 
   useEffect(() => {
     setVisibleCount(ROUTE_PAGE_SIZE);
+  }, [city, temperature, stops]);
+
+  useEffect(() => {
+    setSelectedIds((current) => current.filter((id) => stops.some((stop) => stop.id === id)));
   }, [stops]);
 
-  return (
-    <div className="route-list">
-      <section className="route-map" aria-label="Mapa de prioridad comercial">
-        <div className="route-map__cities">
-          {Object.entries(CITY_POSITIONS).map(([city, position]) => (
-            <span key={city} style={{ left: `${position.x}%`, top: `${position.y}%` }}>
-              {city}
-            </span>
-          ))}
-        </div>
-        {visibleStops.slice(0, 70).map((lead, index) => {
-          const position = leadPosition(lead, index);
-          const priority = lead.score >= 80 ? "high" : lead.score >= 60 ? "medium" : "low";
+  function toggleStop(stop: RouteStop) {
+    setSelectedIds((current) => current.includes(stop.id) ? current.filter((id) => id !== stop.id) : [...current, stop.id]);
+  }
 
-          return (
+  function moveSelected(index: number, direction: -1 | 1) {
+    setSelectedIds((current) => {
+      const next = [...current];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return current;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function mapsUrl() {
+    const route = selectedStops.length ? selectedStops : visibleStops.slice(0, 8);
+    if (!route.length) return "";
+    const [first, ...rest] = route;
+    const destination = rest.at(-1) || first;
+    const waypoints = rest.slice(0, -1).map(stopQuery).join("|");
+    const params = new URLSearchParams({
+      api: "1",
+      origin: stopQuery(first),
+      destination: stopQuery(destination),
+      travelmode: "driving"
+    });
+    if (waypoints) params.set("waypoints", waypoints);
+    return `https://www.google.com/maps/dir/?${params.toString()}`;
+  }
+
+  function copyList() {
+    const route = selectedStops.length ? selectedStops : visibleStops.slice(0, 12);
+    void navigator.clipboard?.writeText(
+      route.map((stop, index) => `${index + 1}. ${stop.name} · ${stop.city} · ${stop.address || stop.googleMapsUrl || ""}`).join("\n")
+    );
+  }
+
+  return (
+    <div className="route-planner">
+      <section className="route-control">
+        <div>
+          <span className="eyebrow">Ruta</span>
+          <h2>{selectedStops.length || visibleStops.length}</h2>
+        </div>
+        <select value={city} onChange={(event) => setCity(event.target.value)} aria-label="Ciudad ruta">
+          <option value="">Todas</option>
+          {cities.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <select value={temperature} onChange={(event) => setTemperature(event.target.value)} aria-label="Temperatura ruta">
+          <option value="">Temperatura</option>
+          {["Muy caliente", "Caliente", "Templado", "Frío"].map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <a className="button" href={mapsUrl() || undefined} target="_blank" rel="noreferrer" aria-disabled={!visibleStops.length}>
+          Maps
+        </a>
+        <button className="button button--ghost" type="button" onClick={copyList} disabled={!visibleStops.length}>
+          Copiar
+        </button>
+        <button
+          className="button button--ghost"
+          type="button"
+          onClick={() => onMarkVisited?.(selectedStops)}
+          disabled={!selectedStops.length}
+        >
+          Visitados
+        </button>
+      </section>
+
+      <div className="route-grid">
+        <section className="route-map route-map--manual" aria-label="Plan de ruta">
+          <div className="route-map__path" />
+          {(selectedStops.length ? selectedStops : visibleStops.slice(0, 14)).map((lead, index) => (
             <button
-              className={`route-map__dot route-map__dot--${priority}`}
+              className={`route-map__dot route-map__dot--${scoreTone(lead.score)}`}
               key={lead.id}
               type="button"
-              style={{ left: `${position.x}%`, top: `${position.y}%` }}
+              style={{ left: `${10 + (index % 5) * 20}%`, top: `${18 + Math.floor(index / 5) * 26}%` }}
               onClick={() => onSelect(lead)}
               title={`${lead.name} · ${lead.city} · ${lead.score}`}
             >
-              <span>{lead.visitOrder}</span>
+              <span>{index + 1}</span>
             </button>
-          );
-        })}
-      </section>
+          ))}
+        </section>
+
+        <section className="route-selection">
+          <header>
+            <span>Orden</span>
+            <strong>{selectedStops.length}</strong>
+          </header>
+          {selectedStops.length ? selectedStops.map((stop, index) => (
+            <article key={stop.id} className="route-selected">
+              <strong>{index + 1}</strong>
+              <button type="button" onClick={() => onSelect(stop)}>
+                <span>{stop.name}</span>
+                <small>{stop.city} · {stop.address || "Coordenadas pendientes"}</small>
+              </button>
+              <div>
+                <button type="button" onClick={() => moveSelected(index, -1)} disabled={index === 0}>^</button>
+                <button type="button" onClick={() => moveSelected(index, 1)} disabled={index === selectedStops.length - 1}>v</button>
+              </div>
+            </article>
+          )) : (
+            <p className="empty-state">Selecciona comercios.</p>
+          )}
+        </section>
+      </div>
+
       <div className="list-status">
-        <span>
-          Mostrando {visibleStops.length} de {stops.length}
-        </span>
-        {visibleStops.length < stops.length ? (
-          <button type="button" onClick={() => setVisibleCount((current) => current + ROUTE_PAGE_SIZE)}>
-            Ver más
-          </button>
+        <span>Mostrando {visibleStops.length} de {filteredStops.length}</span>
+        {visibleStops.length < filteredStops.length ? (
+          <button type="button" onClick={() => setVisibleCount((current) => current + ROUTE_PAGE_SIZE)}>Ver más</button>
         ) : null}
       </div>
-      {visibleStops.map((lead) => (
-        <button className="route-stop" key={lead.id} type="button" onClick={() => onSelect(lead)}>
-          <span className="route-stop__order">{lead.visitOrder}</span>
-          <div>
-            <strong>{lead.name}</strong>
-            <small>
-              {lead.city} · {lead.address}
-            </small>
-            <p>{lead.routeReason}</p>
-          </div>
-          <span className="route-stop__score">{lead.score}</span>
-        </button>
-      ))}
+
+      <div className="route-stop-list">
+        {visibleStops.map((lead) => (
+          <article className="route-stop" key={lead.id}>
+            <label>
+              <input type="checkbox" checked={selectedIds.includes(lead.id)} onChange={() => toggleStop(lead)} />
+            </label>
+            <button type="button" onClick={() => onSelect(lead)}>
+              <span className={`route-stop__score score-pill score-pill--${scoreTone(lead.score)}`}>{lead.score}</span>
+              <div>
+                <strong>{lead.name}</strong>
+                <small>{lead.city} · {lead.address || "Coordenadas pendientes"}</small>
+              </div>
+              <em>{scoreLabel(lead.score)}</em>
+            </button>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }
 
-function leadPosition(lead: RouteStop, index: number) {
-  if (typeof lead.latitude === "number" && typeof lead.longitude === "number") {
-    const x = ((lead.longitude - MAP_BOUNDS.minLng) / (MAP_BOUNDS.maxLng - MAP_BOUNDS.minLng)) * 100;
-    const y = 100 - ((lead.latitude - MAP_BOUNDS.minLat) / (MAP_BOUNDS.maxLat - MAP_BOUNDS.minLat)) * 100;
-    return { x: clampMapValue(x), y: clampMapValue(y) };
+function stopQuery(stop: RouteStop) {
+  if (typeof stop.latitude === "number" && typeof stop.longitude === "number") {
+    return `${stop.latitude},${stop.longitude}`;
   }
-
-  const base = CITY_POSITIONS[lead.city] || { x: 50, y: 50 };
-  const ring = (index % 9) - 4;
-  const layer = Math.floor((index % 27) / 9);
-
-  return {
-    x: clampMapValue(base.x + ring * 2.4),
-    y: clampMapValue(base.y + (layer - 1) * 4.2)
-  };
-}
-
-function clampMapValue(value: number) {
-  return Math.max(5, Math.min(95, value));
+  return `${stop.name} ${stop.address} ${stop.city} España`.trim();
 }
