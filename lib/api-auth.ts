@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient, type User } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 
@@ -29,7 +29,7 @@ export async function requireInternalUser(request: Request, options: RequireOpti
   const { url, anonKey } = getSupabaseConfig();
   const admin = createAdminClient();
 
-  if (!url || !anonKey || !admin) {
+  if (!url || !anonKey) {
     return { response: NextResponse.json({ error: "Supabase no configurado" }, { status: 503 }) };
   }
 
@@ -51,7 +51,8 @@ export async function requireInternalUser(request: Request, options: RequireOpti
     return { response: NextResponse.json({ error: "Sesión inválida" }, { status: 401 }) };
   }
 
-  const profile = await getOrBootstrapProfile(admin, user);
+  const dataClient = admin || createUserScopedClient(url, anonKey, token);
+  const profile = await getOrBootstrapProfile(dataClient, user, Boolean(admin));
 
   if (!profile || !profile.is_active) {
     return {
@@ -71,7 +72,7 @@ export async function requireInternalUser(request: Request, options: RequireOpti
   }
 
   return {
-    admin,
+    admin: dataClient,
     user,
     profile: {
       userId: profile.user_id,
@@ -88,8 +89,22 @@ function bearerToken(request: Request) {
   return match?.[1] || "";
 }
 
-async function getOrBootstrapProfile(admin: NonNullable<ReturnType<typeof createAdminClient>>, user: User) {
-  const { data, error } = await admin
+function createUserScopedClient(url: string, anonKey: string, token: string) {
+  return createClient(url, anonKey, {
+    global: {
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  });
+}
+
+async function getOrBootstrapProfile(client: SupabaseClient, user: User, canBootstrap: boolean) {
+  const { data, error } = await client
     .from("profiles")
     .select("user_id,email,full_name,role,is_active")
     .eq("user_id", user.id)
@@ -98,6 +113,7 @@ async function getOrBootstrapProfile(admin: NonNullable<ReturnType<typeof create
 
   if (error) return null;
   if (profile) return profile;
+  if (!canBootstrap) return null;
 
   const allowedEmails = (process.env.INTERNAL_ADMIN_EMAILS || "")
     .split(",")
@@ -108,7 +124,7 @@ async function getOrBootstrapProfile(admin: NonNullable<ReturnType<typeof create
     return null;
   }
 
-  const { data: insertedData, error: insertError } = await admin
+  const { data: insertedData, error: insertError } = await client
     .from("profiles")
     .insert({
       user_id: user.id,
