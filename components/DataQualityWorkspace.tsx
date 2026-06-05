@@ -80,11 +80,12 @@ export function DataQualityWorkspace() {
   return (
     <main className="app">
       <Background />
-      <AppShell currentView="admin" userLabel={`${profile.role} · ${profile.email}`} sourceLabel={message}>
+      <AppShell currentView="system" userLabel={`${profile.role} · ${profile.email}`} sourceLabel={message}>
         <header className="workspace-header workspace-header--compact">
           <div>
-            <p className="eyebrow">Admin</p>
-            <h1>Calidad</h1>
+            <p className="eyebrow">SYSTEM</p>
+            <h1>Data quality</h1>
+            <p className="workspace-subtitle">Revisa descartes y datos incompletos.</p>
           </div>
         </header>
 

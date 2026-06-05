@@ -73,11 +73,12 @@ export function ScanWorkspace() {
   return (
     <main className="app">
       <Background />
-      <AppShell currentView="scan" userLabel={`${profile.role} · ${profile.email}`} sourceLabel="Scan">
+      <AppShell currentView="system" userLabel={`${profile.role} · ${profile.email}`} sourceLabel="System">
         <header className="workspace-header workspace-header--compact">
           <div>
-            <p className="eyebrow">Scan</p>
-            <h1>Zona</h1>
+            <p className="eyebrow">SYSTEM / SCAN</p>
+            <h1>Scan</h1>
+            <p className="workspace-subtitle">Escanea zonas sin exponer claves.</p>
           </div>
         </header>
 

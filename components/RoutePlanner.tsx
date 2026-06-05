@@ -91,7 +91,7 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerPro
         </select>
         <select value={temperature} onChange={(event) => setTemperature(event.target.value)} aria-label="Temperatura ruta">
           <option value="">Temperatura</option>
-          {["Muy caliente", "Caliente", "Templado", "Frío"].map((item) => <option key={item} value={item}>{item}</option>)}
+          {["Prioritario", "Caliente", "Templado", "Frío", "Revisar"].map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
         <a className="button" href={mapsUrl() || undefined} target="_blank" rel="noreferrer" aria-disabled={!visibleStops.length}>
           Maps
@@ -110,22 +110,6 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerPro
       </section>
 
       <div className="route-grid">
-        <section className="route-map route-map--manual" aria-label="Plan de ruta">
-          <div className="route-map__path" />
-          {(selectedStops.length ? selectedStops : visibleStops.slice(0, 14)).map((lead, index) => (
-            <button
-              className={`route-map__dot route-map__dot--${scoreTone(lead.score)}`}
-              key={lead.id}
-              type="button"
-              style={{ left: `${10 + (index % 5) * 20}%`, top: `${18 + Math.floor(index / 5) * 26}%` }}
-              onClick={() => onSelect(lead)}
-              title={`${lead.name} · ${lead.city} · ${lead.score}`}
-            >
-              <span>{index + 1}</span>
-            </button>
-          ))}
-        </section>
-
         <section className="route-selection">
           <header>
             <span>Orden</span>

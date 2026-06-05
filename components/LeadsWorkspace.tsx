@@ -63,6 +63,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const [syncMessage, setSyncMessage] = useState("Cargando");
   const [enrichingId, setEnrichingId] = useState("");
   const [findingOwnerId, setFindingOwnerId] = useState("");
+  const [lastMove, setLastMove] = useState<{ lead: Lead; previousStatus: LeadStatus } | null>(null);
   const [leadCrm, setLeadCrm] = useState<{ activities: LeadActivity[]; tasks: LeadTask[]; notes: LeadNote[] }>({
     activities: [],
     tasks: [],
@@ -88,6 +89,23 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     if (quick) handleQuickView(quick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialView]);
+
+  useEffect(() => {
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSelectedId("");
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        const input = document.querySelector<HTMLInputElement>(".search-field input");
+        input?.focus();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeydown);
+    return () => window.removeEventListener("keydown", handleKeydown);
+  }, []);
 
   const cities = useMemo(() => uniqueOptions([...targetCities, ...leadItems.map((lead) => lead.city)]), [leadItems]);
   const sectors = useMemo(() => uniqueOptions(leadItems.map((lead) => lead.sector)), [leadItems]);
@@ -223,6 +241,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 
   async function handleStatusChange(lead: Lead, nextStatus: LeadStatus) {
     const discard = ["No contactar", "No encaja", "Perdido"].includes(nextStatus);
+    setLastMove({ lead, previousStatus: lead.status });
     await handleSaveLead({
       ...lead,
       status: nextStatus,
@@ -232,6 +251,21 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
       manualOverride: !discard && (lead.isInvalid || lead.isDisqualified) ? true : lead.manualOverride,
       updatedAt: new Date().toISOString()
     });
+  }
+
+  async function undoLastMove() {
+    if (!lastMove) return;
+    await handleSaveLead({
+      ...lastMove.lead,
+      status: lastMove.previousStatus,
+      isInvalid: false,
+      isDisqualified: false,
+      validationStatus: "revisar",
+      manualOverride: true,
+      updatedAt: new Date().toISOString()
+    });
+    setLastMove(null);
+    setSyncMessage("Deshecho");
   }
 
   async function handleNewLead() {
@@ -381,9 +415,13 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
           <div>
             <p className="eyebrow">Firekworks Leads</p>
             <h1>{viewTitle(initialView)}</h1>
+            {initialView === "leads" ? <p className="workspace-subtitle">Busca, valida y prioriza comercios locales.</p> : null}
           </div>
           <div className="header-actions">
             <span className={`source-pill source-pill--${dataSource}`}>{syncMessage}</span>
+            {lastMove ? (
+              <button className="button button--ghost" type="button" onClick={undoLastMove}>Deshacer</button>
+            ) : null}
             {initialView === "leads" ? (
               <>
                 <button className="button button--ghost" type="button" onClick={() => exportLeadsToCsv(filteredLeads)}>CSV</button>

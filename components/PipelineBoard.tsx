@@ -23,7 +23,7 @@ const lanes: Array<{
 }> = [
   { id: "discard", title: "Descartar", tone: "discard", dropStatus: "No contactar", statuses: ["No contactar", "No encaja"] },
   { id: "detected", title: "Detectados", tone: "detected", dropStatus: "Detectado", statuses: ["Detectado", "Validado"] },
-  { id: "priority", title: "Prioritarios", tone: "priority", dropStatus: "Prioritario", statuses: ["Prioritario"] },
+  { id: "priority", title: "Priorizados", tone: "priority", dropStatus: "Prioritario", statuses: ["Prioritario"] },
   { id: "contacted", title: "Contactados", tone: "contacted", dropStatus: "Contactado", statuses: ["Contactado", "Respondió"] },
   {
     id: "closing",

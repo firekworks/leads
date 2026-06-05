@@ -1,10 +1,5 @@
-import { AuthGate } from "@/components/AuthGate";
-import { TextsAdmin } from "@/components/TextsAdmin";
+import { redirect } from "next/navigation";
 
-export default function AdminTextsPage() {
-  return (
-    <AuthGate>
-      <TextsAdmin />
-    </AuthGate>
-  );
+export default function LegacyAdminTextsPage() {
+  redirect("/system/texts");
 }

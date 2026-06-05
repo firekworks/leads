@@ -89,12 +89,12 @@ export function TextsAdmin() {
   return (
     <main className="app">
       <Background />
-      <AppShell currentView="admin">
+      <AppShell currentView="system">
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">Admin</p>
-            <h1>Textos</h1>
-            <p className="workspace-subtitle">Copys compartidos para productos Firekworks con fallback seguro.</p>
+            <p className="eyebrow">SYSTEM</p>
+            <h1>Snippets</h1>
+            <p className="workspace-subtitle">Textos internos de Leads.</p>
           </div>
           <div className="header-actions">
             <span className="source-pill source-pill--supabase">{message}</span>

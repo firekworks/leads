@@ -86,13 +86,13 @@ export function SocialImportWorkspace() {
     <main className="app">
       <Background />
       <AppShell
-        currentView="scan"
+        currentView="system"
         userLabel={`${profile.role} · ${profile.email}`}
-        sourceLabel={message}
+        sourceLabel={`System · ${message}`}
       >
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">Scan redes</p>
+            <p className="eyebrow">SYSTEM / REDES</p>
             <h1>Perfiles sociales</h1>
             <p className="workspace-subtitle">Pega Instagram, Facebook, seguidores y uso de contenido sin gastar Google Places.</p>
           </div>

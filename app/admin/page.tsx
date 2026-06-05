@@ -1,10 +1,5 @@
-import { AuthGate } from "@/components/AuthGate";
-import { AdminWorkspace } from "@/components/AdminWorkspace";
+import { redirect } from "next/navigation";
 
-export default function AdminPage() {
-  return (
-    <AuthGate>
-      <AdminWorkspace />
-    </AuthGate>
-  );
+export default function LegacyAdminPage() {
+  redirect("/system");
 }

@@ -1,10 +1,5 @@
-import { AuthGate } from "@/components/AuthGate";
-import { ScanWorkspace } from "@/components/ScanWorkspace";
+import { redirect } from "next/navigation";
 
-export default function ScanPage() {
-  return (
-    <AuthGate>
-      <ScanWorkspace />
-    </AuthGate>
-  );
+export default function LegacyScanPage() {
+  redirect("/system/scan");
 }

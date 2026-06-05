@@ -48,7 +48,7 @@ export function PulseDashboard({ leads, onSelect }: PulseDashboardProps) {
           <strong>{hot.length + noInstagram.length + suspect.length}</strong>
         </header>
         <Action href="/leads?quick=hot" label="Revisar calientes" count={hot.length} />
-        <Action href="/admin/data-quality" label="Limpiar descartes" count={suspect.length} />
+        <Action href="/system/data-quality" label="Limpiar descartes" count={suspect.length} />
         <Action href="/leads?quick=noInstagram" label="Añadir Instagram" count={noInstagram.length} />
       </aside>
 
@@ -69,7 +69,7 @@ export function PulseDashboard({ leads, onSelect }: PulseDashboardProps) {
       <article className="quality-panel">
         <header>
           <span>Calidad</span>
-          <Link href="/admin/data-quality">Datos</Link>
+          <Link href="/system/data-quality">Datos</Link>
         </header>
         <QualityBar label="Sin Instagram" value={noInstagram.length} total={valid.length} />
         <QualityBar label="Sin web" value={noWeb.length} total={valid.length} />

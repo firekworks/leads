@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function LegacyImportPage() {
-  redirect("/scan");
+  redirect("/system/scan");
 }

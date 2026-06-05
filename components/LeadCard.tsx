@@ -14,7 +14,7 @@ type LeadCardProps = {
 export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
   const initial = lead.name.trim().slice(0, 1).toUpperCase() || "F";
   const temperature = scoreLabel(lead.score);
-  const tags = (lead.scoreTags || []).slice(0, 3);
+  const chips = cardChips(lead);
 
   return (
     <motion.button
@@ -61,17 +61,28 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
           <strong>{lead.score}</strong>
           <small>{temperature}</small>
         </span>
+        <span className="action-chip">{quickAction(lead)}</span>
         <span className="lead-card__chips">
-          <span className="meta-chip">{quickAction(lead)}</span>
-          <span className="meta-chip">IG {lead.followersBucket}</span>
-          <span className="meta-chip meta-chip--content">{lead.contentUse}</span>
-          {tags.map((tag) => (
-            <span className="meta-chip meta-chip--quiet" key={tag}>{tag}</span>
+          {chips.map((tag) => (
+            <span className="meta-chip" key={tag}>{tag}</span>
           ))}
         </span>
       </span>
     </motion.button>
   );
+}
+
+function cardChips(lead: Lead) {
+  const chips: string[] = [];
+  if (lead.isInvalid || lead.isDisqualified || lead.status === "No contactar") chips.push("Público");
+  if (!lead.instagramUrl) chips.push("Sin IG");
+  if (!lead.website) chips.push("Sin web");
+  if (lead.phone || lead.whatsappUrl) chips.push("Teléfono");
+  if (lead.reviews >= 80) chips.push("Buenas reseñas");
+  if (lead.validationStatus === "duplicado") chips.push("Duplicado");
+  if (!chips.length && lead.followersBucket && lead.followersBucket !== "Pendiente") chips.push(`IG ${lead.followersBucket}`);
+  if (chips.length < 3 && lead.contentUse && lead.contentUse !== "Pendiente") chips.push(lead.contentUse);
+  return Array.from(new Set(chips)).slice(0, 3);
 }
 
 function SignalChip({

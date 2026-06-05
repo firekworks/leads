@@ -1,10 +1,5 @@
-import { AuthGate } from "@/components/AuthGate";
-import { DataQualityWorkspace } from "@/components/DataQualityWorkspace";
+import { redirect } from "next/navigation";
 
-export default function DataQualityPage() {
-  return (
-    <AuthGate>
-      <DataQualityWorkspace />
-    </AuthGate>
-  );
+export default function LegacyAdminDataQualityPage() {
+  redirect("/system/data-quality");
 }

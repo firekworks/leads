@@ -140,7 +140,7 @@ export function Filters({
           <input
             value={query}
             onChange={(event) => onQuery(event.target.value)}
-            placeholder="Buscar comercio, ciudad o siguiente acción"
+            placeholder="Buscar comercio, ciudad, sector, Instagram o siguiente acción"
           />
         </label>
         <button className="button button--ghost filters__toggle" type="button" onClick={() => setOpen((value) => !value)}>
