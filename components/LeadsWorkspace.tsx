@@ -67,7 +67,8 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const [withoutWhatsapp, setWithoutWhatsapp] = useState(false);
   const [withoutPhone, setWithoutPhone] = useState(false);
   const [minScore, setMinScore] = useState(0);
-  const [selectedId, setSelectedId] = useState(seedLeads[0]?.id || "");
+  const [selectedId, setSelectedId] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [dataSource, setDataSource] = useState<LeadsSource>("localStorage");
   const [syncMessage, setSyncMessage] = useState("Cargando datos");
   const [enrichingId, setEnrichingId] = useState("");
@@ -96,7 +97,6 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
             ? `Fallback local: ${result.error}`
             : "Fallback local activo"
       );
-      setSelectedId((current) => current || result.leads[0]?.id || "");
     });
 
     return () => {
@@ -179,8 +179,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 
   const visibleLeads = filteredLeads.slice(0, visibleLeadCount);
 
-  const selectedLead =
-    filteredLeads.find((lead) => lead.id === selectedId) || filteredLeads[0] || leadItems[0];
+  const selectedLead = leadItems.find((lead) => lead.id === selectedId) || null;
 
   useEffect(() => {
     if (!selectedLead?.id) return;
@@ -243,6 +242,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 
   function handleSelect(lead: Lead) {
     setSelectedId(lead.id);
+    setDrawerOpen(true);
   }
 
   async function handleSaveLead(lead: Lead) {
@@ -251,6 +251,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     setDataSource(result.source);
     setSyncMessage(result.source === "supabase" ? "Guardado en Supabase" : "Guardado en localStorage");
     setSelectedId(result.lead.id);
+    setDrawerOpen(true);
   }
 
   async function handleStatusChange(lead: Lead, nextStatus: LeadStatus) {
@@ -262,6 +263,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     const result = await persistLead(lead, accessToken);
     setLeadItems(result.leads);
     setSelectedId(lead.id);
+    setDrawerOpen(true);
     setDataSource(result.source);
     setSyncMessage(result.source === "supabase" ? "Lead creado en Supabase" : "Lead creado localmente");
   }
@@ -355,7 +357,6 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 
       if (payload.leads?.length) {
         setLeadItems(payload.leads);
-        setSelectedId((current) => current || payload.leads?.[0]?.id || "");
         setDataSource("supabase");
       }
 
@@ -494,15 +495,48 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     };
   }, [leadItems]);
 
+  const drawer = drawerOpen ? (
+    selectedLead ? (
+      <LeadDetail
+        lead={selectedLead}
+        statuses={statuses}
+        onSave={handleSaveLead}
+        onEnrich={handleEnrich}
+        onFindOwner={handleFindOwner}
+        onAddActivity={handleAddActivity}
+        onConvert={handleConvertLead}
+        onClose={() => setDrawerOpen(false)}
+        activities={leadCrm.activities}
+        tasks={leadCrm.tasks}
+        notes={leadCrm.notes}
+        enriching={enrichingId === selectedLead.id}
+        findingOwner={findingOwnerId === selectedLead.id}
+      />
+    ) : (
+      <aside className="lead-detail lead-detail--empty">
+        <button className="drawer-close" type="button" onClick={() => setDrawerOpen(false)} aria-label="Cerrar ficha">
+          ×
+        </button>
+        <span className="eyebrow">Ficha comercial</span>
+        <h2>Selecciona un comercio</h2>
+        <p>Abre una card para ver contacto, diagnóstico, mensajes y seguimiento.</p>
+      </aside>
+    )
+  ) : null;
+
   return (
     <main className="app">
       <Background />
-      <AppShell currentView={initialView}>
+      <AppShell
+        currentView={initialView}
+        userLabel={`${profile.role} · ${profile.email}`}
+        sourceLabel={dataSource === "supabase" ? "Supabase activo" : syncMessage}
+      >
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">Radar comercial Firekworks</p>
-            <h1>{initialView === "radar" ? "Radar de comercios" : viewTitle(initialView)}</h1>
-            <p className="workspace-subtitle">Prioridad, temperatura, hueco visual y siguiente acción en una sola vista.</p>
+            <p className="eyebrow">Leads Firekworks</p>
+            <h1>{initialView === "radar" ? "Comercial" : viewTitle(initialView)}</h1>
+            <p className="workspace-subtitle">Prioridad, temperatura y próxima acción en una sola vista.</p>
           </div>
           <div className="header-actions">
             <span className="source-pill source-pill--supabase">
@@ -522,77 +556,84 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
           </div>
         </header>
 
-        <section className="stat-strip" aria-label="Resumen">
-          <article>
+        <section className="stat-strip" aria-label="Resumen principal">
+          <article className="stat-card stat-card--base">
+            <span className="css-icon css-icon--store" aria-hidden="true" />
             <span>Leads activos</span>
             <strong>{openPipeline}</strong>
           </article>
-          <article>
-            <span>Muy calientes</span>
+          <article className="stat-card stat-card--hot">
+            <span className="css-icon css-icon--flame" aria-hidden="true" />
+            <span>Prioritarios calientes</span>
             <strong>{hotLeads}</strong>
           </article>
-          <article>
+          <article className="stat-card stat-card--gap">
+            <span className="css-icon css-icon--instagram" aria-hidden="true" />
             <span>Sin Instagram</span>
             <strong>{missingInstagram}</strong>
           </article>
-          <article>
+          <article className="stat-card stat-card--money">
+            <span className="css-icon css-icon--euro" aria-hidden="true" />
             <span>Previsión mensual</span>
             <strong>≈ {monthlyEstimate}€</strong>
           </article>
         </section>
 
-        <section className="dashboard-grid" aria-label="Dashboard interno">
-          <article>
-            <span>Nuevos mes</span>
-            <strong>{dashboard.newThisMonth}</strong>
-          </article>
-          <article>
-            <span>Prioritarios</span>
-            <strong>{dashboard.priority}</strong>
-          </article>
-          <article>
-            <span>Contactados</span>
-            <strong>{dashboard.contacted}</strong>
-          </article>
-          <article>
-            <span>Reuniones</span>
-            <strong>{dashboard.meetings}</strong>
-          </article>
-          <article>
-            <span>Propuestas</span>
-            <strong>{dashboard.proposals}</strong>
-          </article>
-          <article>
-            <span>Ganados</span>
-            <strong>{dashboard.won}</strong>
-          </article>
-          <article>
-            <span>Conversión</span>
-            <strong>{dashboard.conversion}%</strong>
-          </article>
-          <article className="dashboard-grid__wide">
-            <span>Sectores con potencial</span>
-            <strong>{dashboard.bySector.map(([name, count]) => `${name} ${count}`).join(" · ")}</strong>
-          </article>
-          <article className="dashboard-grid__wide">
-            <span>Ciudades</span>
-            <strong>{dashboard.byCity.map(([name, count]) => `${name} ${count}`).join(" · ")}</strong>
-          </article>
-          <article className="dashboard-grid__wide">
-            <span>Próximos seguimientos</span>
-            <strong>
-              {dashboard.followUps.length
-                ? dashboard.followUps.map((lead) => `${lead.name} · ${new Date(lead.nextFollowUpAt || "").toLocaleDateString("es-ES")}`).join(" · ")
-                : "Sin seguimientos"}
-            </strong>
-          </article>
-        </section>
+        <details className="metrics-disclosure">
+          <summary>Ver más métricas</summary>
+          <section className="dashboard-grid" aria-label="Dashboard interno">
+            <article>
+              <span>Nuevos mes</span>
+              <strong>{dashboard.newThisMonth}</strong>
+            </article>
+            <article>
+              <span>Prioritarios</span>
+              <strong>{dashboard.priority}</strong>
+            </article>
+            <article>
+              <span>Contactados</span>
+              <strong>{dashboard.contacted}</strong>
+            </article>
+            <article>
+              <span>Reuniones</span>
+              <strong>{dashboard.meetings}</strong>
+            </article>
+            <article>
+              <span>Propuestas</span>
+              <strong>{dashboard.proposals}</strong>
+            </article>
+            <article>
+              <span>Ganados</span>
+              <strong>{dashboard.won}</strong>
+            </article>
+            <article>
+              <span>Conversión</span>
+              <strong>{dashboard.conversion}%</strong>
+            </article>
+            <article className="dashboard-grid__wide">
+              <span>Sectores con potencial</span>
+              <strong>{dashboard.bySector.map(([name, count]) => `${name} ${count}`).join(" · ")}</strong>
+            </article>
+            <article className="dashboard-grid__wide">
+              <span>Ciudades</span>
+              <strong>{dashboard.byCity.map(([name, count]) => `${name} ${count}`).join(" · ")}</strong>
+            </article>
+            <article className="dashboard-grid__wide">
+              <span>Próximos seguimientos</span>
+              <strong>
+                {dashboard.followUps.length
+                  ? dashboard.followUps.map((lead) => `${lead.name} · ${new Date(lead.nextFollowUpAt || "").toLocaleDateString("es-ES")}`).join(" · ")
+                  : "Sin seguimientos"}
+              </strong>
+            </article>
+          </section>
+        </details>
 
         <AnimatePresence mode="wait">
           {initialView === "radar" ? (
             <motion.section
               key="radar"
-              className="radar-layout"
+              className={drawerOpen ? "radar-layout workspace-layout--drawer" : "radar-layout"}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
@@ -631,36 +672,38 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   onMinScore={setMinScore}
                 />
 
-                <div className="import-strip">
-                  <div>
+                <details className="import-strip">
+                  <summary>
                     <strong>Importación Foia</strong>
                     <span>{placesMessage}</span>
+                  </summary>
+                  <div className="import-strip__actions">
+                    <button
+                      className="button button--ghost"
+                      type="button"
+                      onClick={() => handlePlacesImport("preview")}
+                      disabled={importingPlaces}
+                    >
+                      Plan sin coste
+                    </button>
+                    <button
+                      className="button button--quiet"
+                      type="button"
+                      onClick={() => handlePlacesImport("import")}
+                      disabled={importingPlaces}
+                    >
+                      Importar 1 búsqueda
+                    </button>
+                    <button
+                      className="button button--ghost"
+                      type="button"
+                      onClick={handleDuplicateScan}
+                      disabled={checkingDuplicates}
+                    >
+                      {checkingDuplicates ? "Revisando" : "Duplicados"}
+                    </button>
                   </div>
-                  <button
-                    className="button button--ghost"
-                    type="button"
-                    onClick={() => handlePlacesImport("preview")}
-                    disabled={importingPlaces}
-                  >
-                    Plan sin coste
-                  </button>
-                  <button
-                    className="button button--quiet"
-                    type="button"
-                    onClick={() => handlePlacesImport("import")}
-                    disabled={importingPlaces}
-                  >
-                    Importar 1 búsqueda
-                  </button>
-                  <button
-                    className="button button--ghost"
-                    type="button"
-                    onClick={handleDuplicateScan}
-                    disabled={checkingDuplicates}
-                  >
-                    {checkingDuplicates ? "Revisando" : "Duplicados"}
-                  </button>
-                </div>
+                </details>
 
                 <div className="lead-list">
                   {filteredLeads.length ? (
@@ -696,22 +739,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                 </div>
               </div>
 
-              {selectedLead ? (
-                <LeadDetail
-                  lead={selectedLead}
-                  statuses={statuses}
-                  onSave={handleSaveLead}
-                  onEnrich={handleEnrich}
-                  onFindOwner={handleFindOwner}
-                  onAddActivity={handleAddActivity}
-                  onConvert={handleConvertLead}
-                  activities={leadCrm.activities}
-                  tasks={leadCrm.tasks}
-                  notes={leadCrm.notes}
-                  enriching={enrichingId === selectedLead.id}
-                  findingOwner={findingOwnerId === selectedLead.id}
-                />
-              ) : null}
+              {drawer}
             </motion.section>
           ) : null}
 
@@ -728,7 +756,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                 <span>Estados comerciales</span>
                 <p>Arrastra comercios entre estados y conserva cada avance en su ficha.</p>
               </div>
-              <div className="pipeline-layout">
+              <div className={drawerOpen ? "pipeline-layout workspace-layout--drawer" : "pipeline-layout"}>
                 <PipelineBoard
                   leads={leadItems}
                   statuses={statuses}
@@ -736,22 +764,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   onSelect={handleSelect}
                   onStatusChange={handleStatusChange}
                 />
-                {selectedLead ? (
-                  <LeadDetail
-                    lead={selectedLead}
-                    statuses={statuses}
-                    onSave={handleSaveLead}
-                    onEnrich={handleEnrich}
-                    onFindOwner={handleFindOwner}
-                    onAddActivity={handleAddActivity}
-                    onConvert={handleConvertLead}
-                    activities={leadCrm.activities}
-                    tasks={leadCrm.tasks}
-                    notes={leadCrm.notes}
-                    enriching={enrichingId === selectedLead.id}
-                    findingOwner={findingOwnerId === selectedLead.id}
-                  />
-                ) : null}
+                {drawer}
               </div>
             </motion.section>
           ) : null}
@@ -769,24 +782,9 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                 <span>Ruta presencial</span>
                 <p>Orden pensado para salir por Castalla, Ibi y Onil con foco.</p>
               </div>
-              <div className="route-layout">
+              <div className={drawerOpen ? "route-layout workspace-layout--drawer" : "route-layout"}>
                 <RoutePlanner stops={routeStops} onSelect={handleSelect} />
-                {selectedLead ? (
-                  <LeadDetail
-                    lead={selectedLead}
-                    statuses={statuses}
-                    onSave={handleSaveLead}
-                    onEnrich={handleEnrich}
-                    onFindOwner={handleFindOwner}
-                    onAddActivity={handleAddActivity}
-                    onConvert={handleConvertLead}
-                    activities={leadCrm.activities}
-                    tasks={leadCrm.tasks}
-                    notes={leadCrm.notes}
-                    enriching={enrichingId === selectedLead.id}
-                    findingOwner={findingOwnerId === selectedLead.id}
-                  />
-                ) : null}
+                {drawer}
               </div>
             </motion.section>
           ) : null}
@@ -799,7 +797,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 function viewTitle(view: LeadsWorkspaceProps["initialView"]) {
   if (view === "pipeline") return "Pipeline comercial";
   if (view === "ruta") return "Ruta de visitas";
-  return "Oportunidades locales";
+  return "Leads comerciales";
 }
 
 function uniqueOptions(values: string[]) {

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Lead, LeadStatus } from "@/types/lead";
-import { estimateMonthlyValue, scoreTone } from "@/lib/scoring";
+import { scoreLabel, scoreTone } from "@/lib/scoring";
 import { statusTone } from "@/lib/status";
 
 type PipelineBoardProps = {
@@ -40,7 +40,10 @@ export function PipelineBoard({ leads, statuses, selectedId, onSelect, onStatusC
             }}
           >
             <header>
-              <span>{status}</span>
+              <span>
+                <i className={`css-icon css-icon--${statusIcon(status)}`} aria-hidden="true" />
+                {status}
+              </span>
               <strong>{columnLeads.length}</strong>
             </header>
             <div className="pipeline-column__list">
@@ -66,13 +69,14 @@ export function PipelineBoard({ leads, statuses, selectedId, onSelect, onStatusC
                     >
                       <button className="pipeline-card__body" type="button" onClick={() => onSelect(lead)}>
                         <span className={`score-pill score-pill--${scoreTone(lead.score)}`}>
-                          {lead.score}
+                          <strong>{lead.score}</strong>
                         </span>
                         <span>
                           <strong>{lead.name}</strong>
                           <small>
-                            {lead.city} · {lead.contentUse} · ≈ {estimateMonthlyValue(lead)}€/mes
+                            {lead.city} · {lead.sector}
                           </small>
+                          <em>{scoreLabel(lead.score)} · {lead.nextAction || "Definir siguiente acción"}</em>
                         </span>
                       </button>
                       <div className="pipeline-card__moves">
@@ -119,4 +123,17 @@ export function PipelineBoard({ leads, statuses, selectedId, onSelect, onStatusC
       })}
     </div>
   );
+}
+
+function statusIcon(status: LeadStatus) {
+  if (status === "Ganado") return "trophy";
+  if (status === "No contactar") return "ban";
+  if (status === "Perdido" || status === "No encaja") return "x";
+  if (status === "Propuesta enviada") return "file";
+  if (status === "Reunión agendada") return "calendar";
+  if (status === "Respondió") return "message";
+  if (status === "Contactado") return "whatsapp";
+  if (status === "Prioritario") return "flame";
+  if (status === "Validado") return "check";
+  return "store";
 }

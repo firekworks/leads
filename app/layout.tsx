@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Firekworks Leads",
-  description: "Radar interno de oportunidades comerciales para Firekworks.",
+  description: "CRM interno de oportunidades comerciales para Firekworks.",
   robots: {
     index: false,
     follow: false

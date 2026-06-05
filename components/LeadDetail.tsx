@@ -15,6 +15,7 @@ type LeadDetailProps = {
   onFindOwner: (lead: Lead) => void;
   onAddActivity: (lead: Lead, activity: { type: string; result: string; nextAction: string; reminderAt: string }) => void;
   onConvert: (lead: Lead) => void;
+  onClose?: () => void;
   activities: LeadActivity[];
   tasks: LeadTask[];
   notes: LeadNote[];
@@ -39,6 +40,15 @@ const contentUses: ContentUse[] = [
 ];
 
 const priorityOptions: Lead["priority"][] = ["Muy alta", "Alta", "Media", "Baja"];
+type DetailTab = "resumen" | "contacto" | "diagnostico" | "mensajes" | "seguimiento" | "cliente";
+const detailTabs: Array<{ id: DetailTab; label: string }> = [
+  { id: "resumen", label: "Resumen" },
+  { id: "contacto", label: "Contacto" },
+  { id: "diagnostico", label: "Diagnóstico" },
+  { id: "mensajes", label: "Mensajes" },
+  { id: "seguimiento", label: "Seguimiento" },
+  { id: "cliente", label: "Cliente" }
+];
 
 export function LeadDetail({
   lead,
@@ -48,6 +58,7 @@ export function LeadDetail({
   onFindOwner,
   onAddActivity,
   onConvert,
+  onClose,
   activities,
   tasks,
   notes,
@@ -59,6 +70,7 @@ export function LeadDetail({
   const [activityType, setActivityType] = useState("WhatsApp");
   const [activityNext, setActivityNext] = useState("");
   const [activityReminder, setActivityReminder] = useState("");
+  const [activeTab, setActiveTab] = useState<DetailTab>("resumen");
   const searchUrls = useMemo(() => googleSearchUrls(draft), [draft]);
   const monthlyValue = estimateMonthlyValue(draft);
   const plan = recommendServicePlan(draft);
@@ -72,8 +84,16 @@ export function LeadDetail({
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
+  function copyText(text: string) {
+    if (!text) return;
+    void navigator.clipboard?.writeText(text);
+  }
+
   return (
     <aside className="lead-detail">
+      <button className="drawer-close" type="button" onClick={onClose} aria-label="Cerrar ficha">
+        ×
+      </button>
       <div className="lead-detail__top">
         <div className="lead-title-block">
           <span className="eyebrow">Ficha comercial</span>
@@ -120,22 +140,36 @@ export function LeadDetail({
         <button className="button button--ghost" type="button" onClick={() => onEnrich(draft)} disabled={enriching}>
           {enriching ? "Enriqueciendo" : "Enriquecer web"}
         </button>
-        <button className="button button--dark" type="button" onClick={() => onConvert(draft)}>
-          Convertir en cliente
-        </button>
       </div>
+
+      <nav className="detail-tabs" aria-label="Secciones de la ficha">
+        {detailTabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={activeTab === tab.id ? "detail-tab detail-tab--active" : "detail-tab"}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
 
       <div className="quick-actions">
         <a href={searchUrls.instagram} target="_blank" rel="noreferrer">
+          <span className="css-icon css-icon--instagram" aria-hidden="true" />
           IG
         </a>
         <a href={searchUrls.facebook} target="_blank" rel="noreferrer">
+          <span className="css-icon css-icon--facebook" aria-hidden="true" />
           FB
         </a>
         <a href={searchUrls.owner} target="_blank" rel="noreferrer">
+          <span className="css-icon css-icon--search" aria-hidden="true" />
           Dueño
         </a>
         <a href={draft.googleMapsUrl || searchUrls.googleMaps} target="_blank" rel="noreferrer">
+          <span className="css-icon css-icon--maps" aria-hidden="true" />
           Maps
         </a>
         <button type="button" onClick={() => onFindOwner(draft)} disabled={findingOwner || !draft.placeId}>
@@ -144,192 +178,235 @@ export function LeadDetail({
       </div>
 
       <div className="detail-form">
-        <section className="detail-section detail-section--decision">
-          <h3>Decisión comercial</h3>
-          <label>
-            Estado
-            <select value={draft.status} onChange={(event) => update("status", event.target.value as LeadStatus)}>
-              {statuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Prioridad
-            <select
-              value={draft.priority}
-              onChange={(event) => update("priority", event.target.value as Lead["priority"])}
+        {activeTab === "resumen" ? (
+          <>
+            <section className="detail-section detail-section--decision">
+              <h3>Decisión comercial</h3>
+              <label>
+                Estado
+                <select value={draft.status} onChange={(event) => update("status", event.target.value as LeadStatus)}>
+                  {statuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Prioridad
+                <select
+                  value={draft.priority}
+                  onChange={(event) => update("priority", event.target.value as Lead["priority"])}
+                >
+                  {priorityOptions.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <NumberField label="Potencial base" value={draft.potential} onChange={(value) => update("potential", value)} />
+              <DateField
+                label="Próximo seguimiento"
+                value={draft.nextFollowUpAt?.slice(0, 16) || ""}
+                onChange={(value) => update("nextFollowUpAt", value)}
+              />
+              <TextArea label="Próximo paso" value={draft.nextAction} onChange={(value) => update("nextAction", value)} />
+            </section>
+
+            <section className="detail-section">
+              <h3>Scoring</h3>
+              <ScoreMetric label="Digital" value={draft.scorePresenciaDigital || 0} />
+              <ScoreMetric label="Urgencia" value={draft.scoreUrgencia || 0} />
+              <ScoreMetric label="Dinero" value={draft.scoreDinero || 0} />
+              <ScoreMetric label="Contacto" value={draft.scoreFacilidadContacto || 0} />
+              <ScoreMetric label="Cierre" value={draft.scoreProbabilidadCierre || 0} />
+              <ScoreMetric label="Visita" value={draft.scorePrioridadVisita || 0} />
+              <div className="score-reasons">
+                {(draft.scoreExplanation || []).map((reason) => (
+                  <span key={reason}>{reason}</span>
+                ))}
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {activeTab === "contacto" ? (
+          <>
+            <section className="detail-section">
+              <h3>Contacto</h3>
+              <Field label="Nombre" value={draft.name} onChange={(value) => update("name", value)} />
+              <Field label="Sector" value={draft.sector} onChange={(value) => update("sector", value)} />
+              <Field label="Ciudad" value={draft.city} onChange={(value) => update("city", value)} />
+              <Field label="Dirección" value={draft.address} onChange={(value) => update("address", value)} />
+              <Field label="Teléfono" value={draft.phone} onChange={(value) => update("phone", value)} />
+              <Field label="Dueño/contacto" value={draft.ownerName} onChange={(value) => update("ownerName", value)} />
+            </section>
+
+            <section className="detail-section">
+              <h3>Imagen digital</h3>
+              <label>
+                Uso de contenido
+                <select value={draft.contentUse} onChange={(event) => update("contentUse", event.target.value as ContentUse)}>
+                  {contentUses.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Seguidores IG
+                <select
+                  value={draft.followersBucket}
+                  onChange={(event) => update("followersBucket", event.target.value as FollowersBucket)}
+                >
+                  {followersBuckets.map((bucket) => (
+                    <option key={bucket} value={bucket}>
+                      {bucket}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Field label="Instagram" value={draft.instagramUrl} onChange={(value) => update("instagramUrl", value)} />
+              <Field label="Facebook" value={draft.facebookUrl} onChange={(value) => update("facebookUrl", value)} />
+              <Field label="WhatsApp" value={draft.whatsappUrl} onChange={(value) => update("whatsappUrl", value)} />
+              <Field label="Web" value={draft.website} onChange={(value) => update("website", value)} />
+              <Field label="Logo" value={draft.logoUrl} onChange={(value) => update("logoUrl", value)} />
+              <Field label="Título web" value={draft.websiteTitle} onChange={(value) => update("websiteTitle", value)} />
+            </section>
+
+            <section className="detail-section">
+              <h3>Google y datos</h3>
+              <NumberField label="Rating" value={draft.rating} onChange={(value) => update("rating", value)} />
+              <NumberField label="Reseñas" value={draft.reviews} onChange={(value) => update("reviews", value)} />
+              <NumberField label="Fotos" value={draft.googlePhotos} onChange={(value) => update("googlePhotos", value)} />
+              <Field label="Google Maps" value={draft.googleMapsUrl} onChange={(value) => update("googleMapsUrl", value)} />
+              <TextArea label="Descripción" value={draft.description} onChange={(value) => update("description", value)} />
+            </section>
+          </>
+        ) : null}
+
+        {activeTab === "diagnostico" ? (
+          <section className="detail-section">
+            <h3>Diagnóstico Firekworks</h3>
+            <TextArea label="Problema detectado" value={draft.problemDetected || ""} onChange={(value) => update("problemDetected", value)} />
+            <TextArea label="Oportunidad detectada" value={draft.opportunityDetected || ""} onChange={(value) => update("opportunityDetected", value)} />
+            <Field label="Servicio recomendado" value={draft.recommendedService || ""} onChange={(value) => update("recommendedService", value)} />
+            <Field label="Oferta recomendada" value={draft.recommendedOffer || ""} onChange={(value) => update("recommendedOffer", value)} />
+            <TextArea label="Dolor" value={draft.pain} onChange={(value) => update("pain", value)} />
+            <TextArea label="Diagnóstico" value={draft.diagnosis} onChange={(value) => update("diagnosis", value)} />
+            <TextArea label="Objeción probable" value={draft.probableObjection || ""} onChange={(value) => update("probableObjection", value)} />
+          </section>
+        ) : null}
+
+        {activeTab === "mensajes" ? (
+          <section className="detail-section">
+            <h3>Mensajes</h3>
+            <TextArea label="WhatsApp sugerido" value={draft.suggestedWhatsappMessage || ""} onChange={(value) => update("suggestedWhatsappMessage", value)} />
+            <button className="button button--ghost detail-form__wide" type="button" onClick={() => copyText(draft.suggestedWhatsappMessage || "")}>
+              Copiar WhatsApp
+            </button>
+            <TextArea label="Instagram sugerido" value={draft.suggestedInstagramMessage || ""} onChange={(value) => update("suggestedInstagramMessage", value)} />
+            <button className="button button--ghost detail-form__wide" type="button" onClick={() => copyText(draft.suggestedInstagramMessage || "")}>
+              Copiar Instagram
+            </button>
+            <TextArea label="Argumento presencial" value={draft.inPersonArgument || ""} onChange={(value) => update("inPersonArgument", value)} />
+            <TextArea label="Gancho de venta" value={draft.salesHook || ""} onChange={(value) => update("salesHook", value)} />
+          </section>
+        ) : null}
+
+        {activeTab === "seguimiento" ? (
+          <section className="detail-section">
+            <h3>Seguimiento</h3>
+            <label>
+              Tipo
+              <select value={activityType} onChange={(event) => setActivityType(event.target.value)}>
+                {["WhatsApp", "llamada", "email", "Instagram", "visita", "reunión", "propuesta", "nota"].map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <DateField label="Recordatorio" value={activityReminder} onChange={setActivityReminder} />
+            <TextArea label="Resultado" value={activityResult} onChange={setActivityResult} />
+            <TextArea label="Siguiente acción" value={activityNext} onChange={setActivityNext} />
+            <button
+              className="button detail-form__wide"
+              type="button"
+              onClick={() => {
+                onAddActivity(draft, {
+                  type: activityType,
+                  result: activityResult,
+                  nextAction: activityNext,
+                  reminderAt: activityReminder
+                });
+                setActivityResult("");
+                setActivityNext("");
+                setActivityReminder("");
+              }}
             >
-              {priorityOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
-          <NumberField label="Potencial base" value={draft.potential} onChange={(value) => update("potential", value)} />
-          <DateField
-            label="Próximo seguimiento"
-            value={draft.nextFollowUpAt?.slice(0, 16) || ""}
-            onChange={(value) => update("nextFollowUpAt", value)}
-          />
-          <TextArea label="Próximo paso" value={draft.nextAction} onChange={(value) => update("nextAction", value)} />
-        </section>
+              Registrar actividad
+            </button>
+            <div className="timeline detail-form__wide">
+              {activities.length || tasks.length || notes.length ? (
+                <>
+                  {tasks.slice(0, 3).map((task) => (
+                    <article key={task.id}>
+                      <strong>{task.title}</strong>
+                      <span>{task.dueAt ? new Date(task.dueAt).toLocaleString("es-ES") : "Sin fecha"} · {task.status}</span>
+                    </article>
+                  ))}
+                  {activities.slice(0, 5).map((activity) => (
+                    <article key={activity.id}>
+                      <strong>{activity.type}</strong>
+                      <span>{activity.result || activity.nextAction || "Actividad registrada"}</span>
+                    </article>
+                  ))}
+                  {notes.slice(0, 3).map((note) => (
+                    <article key={note.id}>
+                      <strong>Nota</strong>
+                      <span>{note.note}</span>
+                    </article>
+                  ))}
+                </>
+              ) : (
+                <span className="empty-state">Sin actividad todavía</span>
+              )}
+            </div>
+          </section>
+        ) : null}
 
-        <section className="detail-section">
-          <h3>Contacto</h3>
-          <Field label="Nombre" value={draft.name} onChange={(value) => update("name", value)} />
-          <Field label="Sector" value={draft.sector} onChange={(value) => update("sector", value)} />
-          <Field label="Ciudad" value={draft.city} onChange={(value) => update("city", value)} />
-          <Field label="Dirección" value={draft.address} onChange={(value) => update("address", value)} />
-          <Field label="Teléfono" value={draft.phone} onChange={(value) => update("phone", value)} />
-          <Field label="Dueño/contacto" value={draft.ownerName} onChange={(value) => update("ownerName", value)} />
-        </section>
-
-        <section className="detail-section">
-          <h3>Imagen digital</h3>
-          <label>
-            Uso de contenido
-            <select value={draft.contentUse} onChange={(event) => update("contentUse", event.target.value as ContentUse)}>
-              {contentUses.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Seguidores IG
-            <select
-              value={draft.followersBucket}
-              onChange={(event) => update("followersBucket", event.target.value as FollowersBucket)}
-            >
-              {followersBuckets.map((bucket) => (
-                <option key={bucket} value={bucket}>
-                  {bucket}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Field label="Instagram" value={draft.instagramUrl} onChange={(value) => update("instagramUrl", value)} />
-          <Field label="Facebook" value={draft.facebookUrl} onChange={(value) => update("facebookUrl", value)} />
-          <Field label="WhatsApp" value={draft.whatsappUrl} onChange={(value) => update("whatsappUrl", value)} />
-          <Field label="Web" value={draft.website} onChange={(value) => update("website", value)} />
-          <Field label="Logo" value={draft.logoUrl} onChange={(value) => update("logoUrl", value)} />
-          <Field label="Título web" value={draft.websiteTitle} onChange={(value) => update("websiteTitle", value)} />
-        </section>
-
-        <section className="detail-section">
-          <h3>Diagnóstico Firekworks</h3>
-          <TextArea label="Problema detectado" value={draft.problemDetected || ""} onChange={(value) => update("problemDetected", value)} />
-          <TextArea label="Oportunidad detectada" value={draft.opportunityDetected || ""} onChange={(value) => update("opportunityDetected", value)} />
-          <Field label="Servicio recomendado" value={draft.recommendedService || ""} onChange={(value) => update("recommendedService", value)} />
-          <Field label="Oferta recomendada" value={draft.recommendedOffer || ""} onChange={(value) => update("recommendedOffer", value)} />
-          <TextArea label="Gancho de venta" value={draft.salesHook || ""} onChange={(value) => update("salesHook", value)} />
-          <TextArea label="Objeción probable" value={draft.probableObjection || ""} onChange={(value) => update("probableObjection", value)} />
-          <TextArea label="WhatsApp sugerido" value={draft.suggestedWhatsappMessage || ""} onChange={(value) => update("suggestedWhatsappMessage", value)} />
-          <TextArea label="Argumento presencial" value={draft.inPersonArgument || ""} onChange={(value) => update("inPersonArgument", value)} />
-        </section>
-
-        <section className="detail-section">
-          <h3>Scoring</h3>
-          <ScoreMetric label="Digital" value={draft.scorePresenciaDigital || 0} />
-          <ScoreMetric label="Urgencia" value={draft.scoreUrgencia || 0} />
-          <ScoreMetric label="Dinero" value={draft.scoreDinero || 0} />
-          <ScoreMetric label="Contacto" value={draft.scoreFacilidadContacto || 0} />
-          <ScoreMetric label="Cierre" value={draft.scoreProbabilidadCierre || 0} />
-          <ScoreMetric label="Visita" value={draft.scorePrioridadVisita || 0} />
-          <div className="score-reasons">
-            {(draft.scoreExplanation || []).map((reason) => (
-              <span key={reason}>{reason}</span>
-            ))}
-          </div>
-        </section>
-
-        <section className="detail-section">
-          <h3>Actividad</h3>
-          <label>
-            Tipo
-            <select value={activityType} onChange={(event) => setActivityType(event.target.value)}>
-              {["WhatsApp", "llamada", "email", "Instagram", "visita", "reunión", "propuesta", "nota"].map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </label>
-          <DateField label="Recordatorio" value={activityReminder} onChange={setActivityReminder} />
-          <TextArea label="Resultado" value={activityResult} onChange={setActivityResult} />
-          <TextArea label="Siguiente acción" value={activityNext} onChange={setActivityNext} />
-          <button
-            className="button detail-form__wide"
-            type="button"
-            onClick={() => {
-              onAddActivity(draft, {
-                type: activityType,
-                result: activityResult,
-                nextAction: activityNext,
-                reminderAt: activityReminder
-              });
-              setActivityResult("");
-              setActivityNext("");
-              setActivityReminder("");
-            }}
-          >
-            Registrar actividad
-          </button>
-          <div className="timeline detail-form__wide">
-            {activities.length || tasks.length || notes.length ? (
+        {activeTab === "cliente" ? (
+          <section className="detail-section">
+            <h3>Cliente / Stats</h3>
+            {draft.clientId ? (
               <>
-                {tasks.slice(0, 3).map((task) => (
-                  <article key={task.id}>
-                    <strong>{task.title}</strong>
-                    <span>{task.dueAt ? new Date(task.dueAt).toLocaleString("es-ES") : "Sin fecha"} · {task.status}</span>
-                  </article>
-                ))}
-                {activities.slice(0, 5).map((activity) => (
-                  <article key={activity.id}>
-                    <strong>{activity.type}</strong>
-                    <span>{activity.result || activity.nextAction || "Actividad registrada"}</span>
-                  </article>
-                ))}
-                {notes.slice(0, 3).map((note) => (
-                  <article key={note.id}>
-                    <strong>Nota</strong>
-                    <span>{note.note}</span>
-                  </article>
-                ))}
+                <Field label="Client ID" value={draft.clientId} onChange={(value) => update("clientId", value)} />
+                <a className="button detail-form__wide" href="/admin/settings/texts">
+                  Abrir ajustes internos
+                </a>
               </>
             ) : (
-              <span className="empty-state">Sin actividad todavía</span>
+              <button className="button button--dark detail-form__wide" type="button" onClick={() => onConvert(draft)}>
+                Convertir en cliente
+              </button>
             )}
-          </div>
-        </section>
-
-        <section className="detail-section">
-          <h3>Google y datos</h3>
-          <NumberField label="Rating" value={draft.rating} onChange={(value) => update("rating", value)} />
-          <NumberField label="Reseñas" value={draft.reviews} onChange={(value) => update("reviews", value)} />
-          <NumberField label="Fotos" value={draft.googlePhotos} onChange={(value) => update("googlePhotos", value)} />
-          <Field label="Google Maps" value={draft.googleMapsUrl} onChange={(value) => update("googleMapsUrl", value)} />
-          <TextArea label="Descripción" value={draft.description} onChange={(value) => update("description", value)} />
-          <TextArea label="Dolor" value={draft.pain} onChange={(value) => update("pain", value)} />
-          <TextArea label="Diagnóstico" value={draft.diagnosis} onChange={(value) => update("diagnosis", value)} />
-          <Field label="Último contacto" value={draft.lastContact} onChange={(value) => update("lastContact", value)} />
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={draft.isInvalid}
-              onChange={(event) => update("isInvalid", event.target.checked)}
-            />
-            Marcado como inválido
-          </label>
-          {draft.isInvalid ? (
-            <Field label="Motivo inválido" value={draft.invalidReason} onChange={(value) => update("invalidReason", value)} />
-          ) : null}
-        </section>
+            <Field label="Último contacto" value={draft.lastContact} onChange={(value) => update("lastContact", value)} />
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={draft.isInvalid}
+                onChange={(event) => update("isInvalid", event.target.checked)}
+              />
+              Marcado como inválido
+            </label>
+            {draft.isInvalid ? (
+              <Field label="Motivo inválido" value={draft.invalidReason} onChange={(value) => update("invalidReason", value)} />
+            ) : null}
+          </section>
+        ) : null}
       </div>
     </aside>
   );

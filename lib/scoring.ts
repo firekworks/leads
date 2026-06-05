@@ -195,17 +195,19 @@ function computeLegacyScore(lead: Omit<Lead, "score"> | Lead) {
 }
 
 export function scoreLabel(score: number) {
-  if (score >= 80) return "Muy caliente";
+  if (score >= 90) return "Fuego";
+  if (score >= 75) return "Muy caliente";
   if (score >= 60) return "Caliente";
   if (score >= 40) return "Templado";
   return "Frío";
 }
 
 export function scoreTone(score: number) {
-  if (score >= 80) return "hot";
+  if (score >= 90) return "fire";
+  if (score >= 75) return "hot";
   if (score >= 60) return "warm";
-  if (score >= 40) return "medium";
-  return "low";
+  if (score >= 40) return "temperate";
+  return "cold";
 }
 
 export function estimateMonthlyValue(lead: Lead) {

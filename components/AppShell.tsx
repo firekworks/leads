@@ -5,16 +5,18 @@ import type { ReactNode } from "react";
 type AppShellProps = {
   children: ReactNode;
   currentView: "radar" | "pipeline" | "ruta" | "textos";
+  userLabel?: string;
+  sourceLabel?: string;
 };
 
 const navItems = [
-  { href: "/", id: "radar", label: "Radar", icon: "radar" },
+  { href: "/", id: "radar", label: "Leads", icon: "store" },
   { href: "/pipeline", id: "pipeline", label: "Pipeline", icon: "pipeline" },
   { href: "/ruta", id: "ruta", label: "Ruta", icon: "route" },
-  { href: "/admin/settings/texts", id: "textos", label: "Textos", icon: "settings" }
+  { href: "/admin/settings/texts", id: "textos", label: "Ajustes", icon: "settings" }
 ] as const;
 
-export function AppShell({ children, currentView }: AppShellProps) {
+export function AppShell({ children, currentView, userLabel, sourceLabel }: AppShellProps) {
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -42,8 +44,9 @@ export function AppShell({ children, currentView }: AppShellProps) {
         </nav>
 
         <div className="sidebar__note">
-          <span>Foco</span>
-          <strong>La Foia: Castalla, Ibi, Onil, Biar y Tibi. Sin Alcoy ni Alicante.</strong>
+          <span>Sistema</span>
+          <strong>{sourceLabel || "Supabase activo"}</strong>
+          {userLabel ? <small>{userLabel}</small> : null}
         </div>
       </aside>
 

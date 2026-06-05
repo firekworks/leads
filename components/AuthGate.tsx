@@ -16,6 +16,8 @@ const SESSION_TIMEOUT_MS = 7000;
 const INTERNAL_ALIASES: Record<string, string> = {
   iker: "firekworks@gmail.com"
 };
+let cachedSession: Session | null = null;
+let cachedProfile: InternalProfile | null = null;
 
 export function useInternalAuth() {
   const context = useContext(AuthContext);
@@ -27,13 +29,13 @@ export function useInternalAuth() {
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const supabase = useMemo(() => createBrowserClient(), []);
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<InternalProfile | null>(null);
+  const [session, setSession] = useState<Session | null>(() => cachedSession);
+  const [profile, setProfile] = useState<InternalProfile | null>(() => cachedProfile);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("Comprobando sesión interna");
   const [resetMessage, setResetMessage] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedSession);
   const [submitting, setSubmitting] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(false);
   const [bootKey, setBootKey] = useState(0);
@@ -52,21 +54,28 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setLoading(false);
     }, SESSION_TIMEOUT_MS);
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      window.clearTimeout(timeout);
-      setSession(data.session);
-      setLoading(false);
-    }).catch((error) => {
-      if (!active) return;
-      window.clearTimeout(timeout);
-      setMessage(error instanceof Error ? error.message : "No se pudo comprobar la sesión");
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        window.clearTimeout(timeout);
+        cachedSession = data.session;
+        setSession(data.session);
+        setLoading(false);
+      })
+      .catch((error) => {
+        if (!active) return;
+        window.clearTimeout(timeout);
+        setMessage(error instanceof Error ? error.message : "No se pudo comprobar la sesión");
+        setLoading(false);
+      });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      const changedUser = cachedSession?.user?.id !== nextSession?.user?.id;
+      cachedSession = nextSession;
+      if (!nextSession || changedUser) cachedProfile = null;
       setSession(nextSession);
-      setProfile(null);
+      if (!nextSession || changedUser) setProfile(null);
     });
 
     return () => {
@@ -79,6 +88,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session?.access_token) {
       setProfile(null);
+      cachedProfile = null;
+      return;
+    }
+
+    if (cachedProfile && cachedSession?.access_token === session.access_token) {
+      setProfile(cachedProfile);
+      setMessage("");
       return;
     }
 
@@ -101,6 +117,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       })
       .then((nextProfile) => {
         if (!active) return;
+        cachedProfile = nextProfile;
         setProfile(nextProfile);
         setMessage("");
       })
@@ -165,17 +182,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   async function signOut() {
     await supabase?.auth.signOut();
+    cachedSession = null;
+    cachedProfile = null;
     setSession(null);
     setProfile(null);
   }
 
-  if (loading) {
+  if (loading || (session && !profile && checkingProfile)) {
     return (
-      <main className="auth-screen">
-        <section className="auth-panel">
-          <span className="auth-mark">Firekworks Leads</span>
-          <h1>Preparando CRM interno</h1>
-          <p>{message}</p>
+      <main className="auth-check">
+        <section className="auth-check__panel">
+          <span className="auth-check__dot" aria-hidden="true" />
+          <div>
+            <strong>Comprobando acceso</strong>
+            <p>{message}</p>
+          </div>
           <button className="button button--ghost" type="button" onClick={() => setBootKey((value) => value + 1)}>
             Reintentar
           </button>

@@ -93,7 +93,7 @@ export function TextsAdmin() {
           <div>
             <p className="eyebrow">Ajustes internos</p>
             <h1>Textos</h1>
-            <p className="workspace-subtitle">Copys compartidos para Leads, Stats, Radar y Web con fallback seguro.</p>
+            <p className="workspace-subtitle">Copys compartidos para productos Firekworks con fallback seguro.</p>
           </div>
           <div className="header-actions">
             <span className="source-pill source-pill--supabase">{message}</span>
