@@ -398,12 +398,38 @@ export function LeadDetail({
               <input
                 type="checkbox"
                 checked={draft.isInvalid}
-                onChange={(event) => update("isInvalid", event.target.checked)}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setDraft((current) => ({
+                    ...current,
+                    isInvalid: checked,
+                    isDisqualified: checked,
+                    validationStatus: checked ? "descartado" : "pendiente",
+                    status: checked ? "No contactar" : current.status === "No contactar" ? "Detectado" : current.status
+                  }));
+                }}
               />
-              Marcado como inválido
+              Descartado / no contactar
             </label>
             {draft.isInvalid ? (
-              <Field label="Motivo inválido" value={draft.invalidReason} onChange={(value) => update("invalidReason", value)} />
+              <>
+                <Field
+                  label="Motivo"
+                  value={draft.disqualifiedReason || draft.invalidReason}
+                  onChange={(value) =>
+                    setDraft((current) => ({
+                      ...current,
+                      invalidReason: value,
+                      disqualifiedReason: value
+                    }))
+                  }
+                />
+                <Field
+                  label="Categoría descarte"
+                  value={draft.disqualifiedCategory || ""}
+                  onChange={(value) => update("disqualifiedCategory", value)}
+                />
+              </>
             ) : null}
           </section>
         ) : null}

@@ -1,6 +1,16 @@
 import { leads as seedLeads } from "@/lib/mock-leads";
 import { computeScoreBreakdown } from "@/lib/scoring";
-import type { ContentUse, FollowersBucket, Lead, LeadSignals, LeadSource, LeadStatus } from "@/types/lead";
+import type {
+  ContentUse,
+  EnrichmentStatus,
+  FollowersBucket,
+  InstagramStatus,
+  Lead,
+  LeadSignals,
+  LeadSource,
+  LeadStatus,
+  ValidationStatus
+} from "@/types/lead";
 
 export type LeadRow = {
   id: string;
@@ -28,6 +38,13 @@ export type LeadRow = {
   source: LeadSource | null;
   is_invalid: boolean | null;
   invalid_reason: string | null;
+  is_disqualified?: boolean | null;
+  disqualified_reason?: string | null;
+  disqualified_category?: string | null;
+  validation_status?: ValidationStatus | null;
+  instagram_status?: InstagramStatus | null;
+  enrichment_status?: EnrichmentStatus | null;
+  last_enriched_at?: string | null;
   last_seen_at: string | null;
   last_refreshed_at: string | null;
   review_owner_candidates: string[] | null;
@@ -104,6 +121,13 @@ export function normalizeLocal(leads: Lead[]) {
       source: legacy.source || "manual",
       isInvalid: Boolean(legacy.isInvalid),
       invalidReason: lead.invalidReason || "",
+      isDisqualified: lead.isDisqualified ?? Boolean(legacy.isInvalid),
+      disqualifiedReason: lead.disqualifiedReason || lead.invalidReason || "",
+      disqualifiedCategory: lead.disqualifiedCategory || "",
+      validationStatus: lead.validationStatus || (legacy.isInvalid ? "descartado" : "pendiente"),
+      instagramStatus: lead.instagramStatus || (instagramUrl ? "encontrado" : "pendiente"),
+      enrichmentStatus: lead.enrichmentStatus || (lead.lastRefreshedAt ? "parcial" : "pendiente"),
+      lastEnrichedAt: lead.lastEnrichedAt || lead.lastRefreshedAt || "",
       lastSeenAt: lead.lastSeenAt || lead.updatedAt || new Date().toISOString(),
       lastRefreshedAt: lead.lastRefreshedAt || "",
       reviewOwnerCandidates: legacy.reviewOwnerCandidates || [],
@@ -172,8 +196,15 @@ export function fromLeadRow(row: LeadRow): Lead {
     googlePhotos: Number(row.google_photos || 0),
     placeId: row.place_id || "",
     source: row.source || "manual",
-    isInvalid: Boolean(row.is_invalid),
-    invalidReason: row.invalid_reason || "",
+    isInvalid: Boolean(row.is_invalid || row.is_disqualified),
+    invalidReason: row.invalid_reason || row.disqualified_reason || "",
+    isDisqualified: Boolean(row.is_disqualified || row.is_invalid),
+    disqualifiedReason: row.disqualified_reason || row.invalid_reason || "",
+    disqualifiedCategory: row.disqualified_category || "",
+    validationStatus: normalizeValidationStatus(row.validation_status || (row.is_invalid || row.is_disqualified ? "descartado" : "pendiente")),
+    instagramStatus: normalizeInstagramStatus(row.instagram_status || (row.instagram_url ? "encontrado" : "pendiente")),
+    enrichmentStatus: normalizeEnrichmentStatus(row.enrichment_status || (row.last_refreshed_at ? "parcial" : "pendiente")),
+    lastEnrichedAt: row.last_enriched_at || row.last_refreshed_at || "",
     lastSeenAt: row.last_seen_at || row.updated_at || new Date().toISOString(),
     lastRefreshedAt: row.last_refreshed_at || "",
     reviewOwnerCandidates: row.review_owner_candidates || [],
@@ -256,8 +287,15 @@ export function toLeadRow(lead: Lead): LeadRow {
     google_photos: normalized.googlePhotos,
     place_id: normalized.placeId,
     source: normalized.source,
-    is_invalid: normalized.isInvalid,
-    invalid_reason: normalized.invalidReason,
+    is_invalid: normalized.isInvalid || Boolean(normalized.isDisqualified),
+    invalid_reason: normalized.invalidReason || normalized.disqualifiedReason || "",
+    is_disqualified: normalized.isInvalid || Boolean(normalized.isDisqualified),
+    disqualified_reason: normalized.disqualifiedReason || normalized.invalidReason || "",
+    disqualified_category: normalized.disqualifiedCategory || "",
+    validation_status: normalizeValidationStatus(normalized.validationStatus || (normalized.isInvalid ? "descartado" : "pendiente")),
+    instagram_status: normalizeInstagramStatus(normalized.instagramStatus || (normalized.instagramUrl ? "encontrado" : "pendiente")),
+    enrichment_status: normalizeEnrichmentStatus(normalized.enrichmentStatus || (normalized.lastRefreshedAt ? "parcial" : "pendiente")),
+    last_enriched_at: normalized.lastEnrichedAt || normalized.lastRefreshedAt || null,
     last_seen_at: normalized.lastSeenAt || new Date().toISOString(),
     last_refreshed_at: normalized.lastRefreshedAt,
     review_owner_candidates: normalized.reviewOwnerCandidates,
@@ -320,6 +358,21 @@ export function withScore<T extends Omit<Lead, "score"> | Lead>(lead: T): Lead {
     source: "source" in lead ? lead.source : "manual",
     isInvalid: "isInvalid" in lead ? lead.isInvalid : false,
     invalidReason: "invalidReason" in lead ? lead.invalidReason : "",
+    isDisqualified: "isDisqualified" in lead ? lead.isDisqualified : "isInvalid" in lead ? lead.isInvalid : false,
+    disqualifiedReason:
+      "disqualifiedReason" in lead ? lead.disqualifiedReason : "invalidReason" in lead ? lead.invalidReason : "",
+    disqualifiedCategory: "disqualifiedCategory" in lead ? lead.disqualifiedCategory : "",
+    validationStatus:
+      "validationStatus" in lead ? normalizeValidationStatus(lead.validationStatus || "pendiente") : "pendiente",
+    instagramStatus:
+      "instagramStatus" in lead
+        ? normalizeInstagramStatus(lead.instagramStatus || "pendiente")
+        : "instagramUrl" in lead && lead.instagramUrl
+          ? "encontrado"
+          : "pendiente",
+    enrichmentStatus:
+      "enrichmentStatus" in lead ? normalizeEnrichmentStatus(lead.enrichmentStatus || "pendiente") : "pendiente",
+    lastEnrichedAt: "lastEnrichedAt" in lead ? lead.lastEnrichedAt : "",
     lastSeenAt: "lastSeenAt" in lead ? lead.lastSeenAt : new Date().toISOString(),
     lastRefreshedAt: "lastRefreshedAt" in lead ? lead.lastRefreshedAt : "",
     reviewOwnerCandidates: "reviewOwnerCandidates" in lead ? lead.reviewOwnerCandidates : [],
@@ -414,6 +467,21 @@ export function normalizeContentUse(value: string): ContentUse {
   const allowed: ContentUse[] = ["Pendiente", "Sin uso", "Flojo", "Activo", "Muy trabajado"];
 
   return legacy[value] || (allowed.includes(value as ContentUse) ? (value as ContentUse) : "Pendiente");
+}
+
+export function normalizeValidationStatus(value: string): ValidationStatus {
+  const allowed: ValidationStatus[] = ["pendiente", "validado", "descartado", "duplicado", "revisar"];
+  return allowed.includes(value as ValidationStatus) ? (value as ValidationStatus) : "pendiente";
+}
+
+export function normalizeInstagramStatus(value: string): InstagramStatus {
+  const allowed: InstagramStatus[] = ["pendiente", "encontrado", "sin_cuenta", "manual", "revisar"];
+  return allowed.includes(value as InstagramStatus) ? (value as InstagramStatus) : "pendiente";
+}
+
+export function normalizeEnrichmentStatus(value: string): EnrichmentStatus {
+  const allowed: EnrichmentStatus[] = ["pendiente", "parcial", "completo", "error"];
+  return allowed.includes(value as EnrichmentStatus) ? (value as EnrichmentStatus) : "pendiente";
 }
 
 export function normalizeSocialUrl(value: string, network: "instagram" | "facebook") {

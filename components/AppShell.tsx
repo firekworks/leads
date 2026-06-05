@@ -4,15 +4,18 @@ import type { ReactNode } from "react";
 
 type AppShellProps = {
   children: ReactNode;
-  currentView: "radar" | "pipeline" | "ruta" | "textos";
+  currentView: "radar" | "leads" | "pipeline" | "ruta" | "importar" | "descartados" | "textos";
   userLabel?: string;
   sourceLabel?: string;
 };
 
 const navItems = [
-  { href: "/", id: "radar", label: "Leads", icon: "store" },
+  { href: "/", id: "radar", label: "Inicio", icon: "home" },
+  { href: "/leads", id: "leads", label: "Leads", icon: "store" },
   { href: "/pipeline", id: "pipeline", label: "Pipeline", icon: "pipeline" },
   { href: "/ruta", id: "ruta", label: "Ruta", icon: "route" },
+  { href: "/import/socials", id: "importar", label: "Importar", icon: "upload" },
+  { href: "/descartados", id: "descartados", label: "Descartados", icon: "ban" },
   { href: "/admin/settings/texts", id: "textos", label: "Ajustes", icon: "settings" }
 ] as const;
 

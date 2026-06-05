@@ -22,7 +22,7 @@ import { leads as seedLeads, statuses } from "@/lib/mock-leads";
 import type { ContentUse, FollowersBucket, Lead, LeadActivity, LeadNote, LeadStatus, LeadTask, RouteStop } from "@/types/lead";
 
 type LeadsWorkspaceProps = {
-  initialView: "radar" | "pipeline" | "ruta";
+  initialView: "radar" | "leads" | "pipeline" | "ruta" | "discarded";
 };
 
 const followersBuckets: FollowersBucket[] = [
@@ -41,7 +41,17 @@ const contentUses: ContentUse[] = [
   "Muy trabajado"
 ];
 
+const targetCities = ["Castalla", "Ibi", "Onil", "Biar", "Tibi", "Elda", "Petrer", "Villena"];
+
 const RADAR_PAGE_SIZE = 80;
+
+const savedViews = [
+  { id: "all", label: "Todo", icon: "store" },
+  { id: "priority", label: "Prioritarios", icon: "flame" },
+  { id: "noInstagram", label: "Sin IG", icon: "instagram" },
+  { id: "noWeb", label: "Sin web", icon: "web" },
+  { id: "contactEasy", label: "Contacto fácil", icon: "whatsapp" }
+] as const;
 
 type EnrichResponse = Partial<
   Pick<
@@ -75,7 +85,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const [findingOwnerId, setFindingOwnerId] = useState("");
   const [importingPlaces, setImportingPlaces] = useState(false);
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
-  const [placesMessage, setPlacesMessage] = useState("Foia preparada: Castalla, Ibi, Onil, Biar y Tibi");
+  const [placesMessage, setPlacesMessage] = useState("Zona preparada: Foia, Elda, Petrer y Villena");
   const [visibleLeadCount, setVisibleLeadCount] = useState(RADAR_PAGE_SIZE);
   const [leadCrm, setLeadCrm] = useState<{ activities: LeadActivity[]; tasks: LeadTask[]; notes: LeadNote[] }>({
     activities: [],
@@ -104,13 +114,18 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     };
   }, [accessToken]);
 
-  const cities = useMemo(() => uniqueOptions(leadItems.map((lead) => lead.city)), [leadItems]);
+  const cities = useMemo(() => uniqueOptions([...targetCities, ...leadItems.map((lead) => lead.city)]), [leadItems]);
   const sectors = useMemo(() => uniqueOptions(leadItems.map((lead) => lead.sector)), [leadItems]);
 
   const filteredLeads = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
+    const viewingDiscarded = initialView === "discarded";
 
     return leadItems.filter((lead) => {
+      const isDiscarded =
+        lead.isInvalid ||
+        Boolean(lead.isDisqualified) ||
+        ["No contactar", "No encaja", "Perdido"].includes(lead.status);
       const matchesQuery = normalizedQuery
         ? [
             lead.name,
@@ -129,6 +144,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         : true;
 
       return (
+        (viewingDiscarded ? isDiscarded : !lead.isInvalid || status === "No contactar") &&
         matchesQuery &&
         (!city || lead.city === city) &&
         (!sector || lead.sector === sector) &&
@@ -140,7 +156,6 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         (!withoutWeb || !lead.website) &&
         (!withoutWhatsapp || !lead.whatsappUrl) &&
         (!withoutPhone || !lead.phone) &&
-        (!lead.isInvalid || status === "No contactar") &&
         (!minScore || lead.score >= minScore)
       );
     });
@@ -157,7 +172,8 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     withoutInstagram,
     withoutPhone,
     withoutWhatsapp,
-    withoutWeb
+    withoutWeb,
+    initialView
   ]);
 
   useEffect(() => {
@@ -225,7 +241,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
           (lead) =>
             !lead.isInvalid &&
             !["Ganado", "Perdido", "No encaja", "No contactar"].includes(lead.status) &&
-            ["Castalla", "Ibi", "Onil", "Biar", "Tibi"].includes(lead.city)
+            targetCities.includes(lead.city)
         )
         .slice()
         .sort((a, b) => b.score - a.score)
@@ -255,7 +271,14 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   }
 
   async function handleStatusChange(lead: Lead, nextStatus: LeadStatus) {
-    await handleSaveLead({ ...lead, status: nextStatus, updatedAt: new Date().toISOString() });
+    const isDisqualified = ["No contactar", "No encaja", "Perdido"].includes(nextStatus);
+    await handleSaveLead({
+      ...lead,
+      status: nextStatus,
+      isDisqualified: isDisqualified || lead.isDisqualified,
+      validationStatus: isDisqualified ? "descartado" : lead.validationStatus,
+      updatedAt: new Date().toISOString()
+    });
   }
 
   async function handleNewLead() {
@@ -454,6 +477,34 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     setSyncMessage("Lead convertido en cliente");
   }
 
+  function clearFilters() {
+    setQuery("");
+    setCity("");
+    setSector("");
+    setStatus("");
+    setFollowersBucket("");
+    setContentUse("");
+    setWithoutInstagram(false);
+    setWithoutFacebook(false);
+    setWithoutWeb(false);
+    setWithoutWhatsapp(false);
+    setWithoutPhone(false);
+    setMinScore(0);
+  }
+
+  function handleSavedView(view: string) {
+    clearFilters();
+    if (view === "priority") {
+      setMinScore(80);
+      setStatus("Prioritario");
+    }
+    if (view === "noInstagram") setWithoutInstagram(true);
+    if (view === "noWeb") setWithoutWeb(true);
+    if (view === "contactEasy") {
+      setMinScore(60);
+    }
+  }
+
   const hotLeads = leadItems.filter((lead) => lead.score >= 80).length;
   const openPipeline = leadItems.filter(
     (lead) => !lead.isInvalid && !["Ganado", "Perdido", "No encaja", "No contactar"].includes(lead.status)
@@ -528,15 +579,15 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     <main className="app">
       <Background />
       <AppShell
-        currentView={initialView}
+        currentView={shellView(initialView)}
         userLabel={`${profile.role} · ${profile.email}`}
         sourceLabel={dataSource === "supabase" ? "Supabase activo" : syncMessage}
       >
         <header className="workspace-header">
           <div>
             <p className="eyebrow">Leads Firekworks</p>
-            <h1>{initialView === "radar" ? "Comercial" : viewTitle(initialView)}</h1>
-            <p className="workspace-subtitle">Prioridad, temperatura y próxima acción en una sola vista.</p>
+            <h1>{viewTitle(initialView)}</h1>
+            <p className="workspace-subtitle">{viewSubtitle(initialView)}</p>
           </div>
           <div className="header-actions">
             <span className="source-pill source-pill--supabase">
@@ -630,9 +681,9 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         </details>
 
         <AnimatePresence mode="wait">
-          {initialView === "radar" ? (
+          {initialView === "radar" || initialView === "leads" || initialView === "discarded" ? (
             <motion.section
-              key="radar"
+              key={initialView}
               className={drawerOpen ? "radar-layout workspace-layout--drawer" : "radar-layout"}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -658,6 +709,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   withoutWhatsapp={withoutWhatsapp}
                   withoutPhone={withoutPhone}
                   minScore={minScore}
+                  savedViews={savedViews}
                   onQuery={setQuery}
                   onCity={setCity}
                   onSector={setSector}
@@ -670,11 +722,23 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   onWithoutWhatsapp={setWithoutWhatsapp}
                   onWithoutPhone={setWithoutPhone}
                   onMinScore={setMinScore}
+                  onSavedView={handleSavedView}
                 />
 
+                {initialView === "discarded" ? (
+                  <div className="discarded-summary">
+                    <span className="css-icon css-icon--ban" aria-hidden="true" />
+                    <div>
+                      <strong>Revisa, recupera o confirma descartes</strong>
+                      <p>Los registros siguen en Supabase y mantienen motivo, categoría y auditoría.</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {initialView !== "discarded" ? (
                 <details className="import-strip">
                   <summary>
-                    <strong>Importación Foia</strong>
+                    <strong>Importación zona</strong>
                     <span>{placesMessage}</span>
                   </summary>
                   <div className="import-strip__actions">
@@ -704,6 +768,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                     </button>
                   </div>
                 </details>
+                ) : null}
 
                 <div className="lead-list">
                   {filteredLeads.length ? (
@@ -732,7 +797,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                     </>
                   ) : (
                     <div className="empty-panel">
-                      <strong>No hay leads con esos filtros</strong>
+                      <strong>{initialView === "discarded" ? "No hay descartados con esos filtros" : "No hay leads con esos filtros"}</strong>
                       <span>Prueba otra ciudad, sector, señal o score.</span>
                     </div>
                   )}
@@ -780,7 +845,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
             >
               <div className="view-intro">
                 <span>Ruta presencial</span>
-                <p>Orden pensado para salir por Castalla, Ibi y Onil con foco.</p>
+                <p>Orden pensado por ciudad, temperatura y facilidad de visita.</p>
               </div>
               <div className={drawerOpen ? "route-layout workspace-layout--drawer" : "route-layout"}>
                 <RoutePlanner stops={routeStops} onSelect={handleSelect} />
@@ -795,9 +860,25 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 }
 
 function viewTitle(view: LeadsWorkspaceProps["initialView"]) {
+  if (view === "radar") return "Inicio";
+  if (view === "leads") return "Leads comerciales";
   if (view === "pipeline") return "Pipeline comercial";
   if (view === "ruta") return "Ruta de visitas";
-  return "Leads comerciales";
+  if (view === "discarded") return "Descartados";
+  return "Leads";
+}
+
+function viewSubtitle(view: LeadsWorkspaceProps["initialView"]) {
+  if (view === "radar") return "Pulso comercial, prioridad y previsión mensual sin ruido.";
+  if (view === "discarded") return "Registros no válidos, no encaja o no contactar, siempre recuperables.";
+  if (view === "pipeline") return "Avanza o retrocede comercios y deja cada fase guardada.";
+  if (view === "ruta") return "Prioriza visitas presenciales por ciudad, temperatura y hueco digital.";
+  return "Filtra, abre fichas y decide la siguiente acción con rapidez.";
+}
+
+function shellView(view: LeadsWorkspaceProps["initialView"]) {
+  if (view === "discarded") return "descartados";
+  return view;
 }
 
 function uniqueOptions(values: string[]) {

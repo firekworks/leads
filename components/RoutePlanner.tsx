@@ -10,16 +10,19 @@ type RoutePlannerProps = {
 
 const ROUTE_PAGE_SIZE = 80;
 const CITY_POSITIONS: Record<string, { x: number; y: number }> = {
+  Villena: { x: 10, y: 18 },
   Biar: { x: 18, y: 34 },
+  Elda: { x: 28, y: 68 },
+  Petrer: { x: 34, y: 64 },
   Onil: { x: 40, y: 54 },
   Castalla: { x: 47, y: 44 },
   Ibi: { x: 66, y: 52 },
   Tibi: { x: 76, y: 76 }
 };
 const MAP_BOUNDS = {
-  minLat: 38.48,
+  minLat: 38.42,
   maxLat: 38.68,
-  minLng: -0.84,
+  minLng: -0.95,
   maxLng: -0.52
 };
 

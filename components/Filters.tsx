@@ -3,12 +3,19 @@
 import { useMemo, useState } from "react";
 import type { ContentUse, FollowersBucket, LeadCity, LeadSector, LeadStatus } from "@/types/lead";
 
+type SavedView = {
+  id: string;
+  label: string;
+  icon: string;
+};
+
 type FiltersProps = {
   cities: LeadCity[];
   sectors: LeadSector[];
   statuses: LeadStatus[];
   followersBuckets: FollowersBucket[];
   contentUses: ContentUse[];
+  savedViews?: readonly SavedView[];
   query: string;
   city: string;
   sector: string;
@@ -33,6 +40,7 @@ type FiltersProps = {
   onWithoutWhatsapp: (value: boolean) => void;
   onWithoutPhone: (value: boolean) => void;
   onMinScore: (value: number) => void;
+  onSavedView?: (value: string) => void;
 };
 
 export function Filters({
@@ -41,6 +49,7 @@ export function Filters({
   statuses,
   followersBuckets,
   contentUses,
+  savedViews = [],
   query,
   city,
   sector,
@@ -64,7 +73,8 @@ export function Filters({
   onWithoutWeb,
   onWithoutWhatsapp,
   onWithoutPhone,
-  onMinScore
+  onMinScore,
+  onSavedView
 }: FiltersProps) {
   const [open, setOpen] = useState(false);
   const activeFilters = useMemo(
@@ -113,6 +123,17 @@ export function Filters({
 
   return (
     <div className="filters">
+      {savedViews.length ? (
+        <div className="saved-views" aria-label="Vistas rápidas">
+          {savedViews.map((view) => (
+            <button key={view.id} type="button" onClick={() => onSavedView?.(view.id)}>
+              <span className={`css-icon css-icon--${view.icon}`} aria-hidden="true" />
+              {view.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className="filters__bar">
         <label className="search-field">
           <span className="css-icon css-icon--search" aria-hidden="true" />

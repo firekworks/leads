@@ -34,6 +34,9 @@ export type ContentUse =
   | "Muy trabajado";
 
 export type LeadSource = "manual" | "google_places" | "importado" | "web";
+export type ValidationStatus = "pendiente" | "validado" | "descartado" | "duplicado" | "revisar";
+export type InstagramStatus = "pendiente" | "encontrado" | "sin_cuenta" | "manual" | "revisar";
+export type EnrichmentStatus = "pendiente" | "parcial" | "completo" | "error";
 
 export type LeadSignals = {
   web: boolean;
@@ -69,6 +72,13 @@ export type Lead = {
   source: LeadSource;
   isInvalid: boolean;
   invalidReason: string;
+  isDisqualified?: boolean;
+  disqualifiedReason?: string;
+  disqualifiedCategory?: string;
+  validationStatus?: ValidationStatus;
+  instagramStatus?: InstagramStatus;
+  enrichmentStatus?: EnrichmentStatus;
+  lastEnrichedAt?: string;
   lastSeenAt: string;
   lastRefreshedAt: string;
   reviewOwnerCandidates: string[];

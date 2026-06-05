@@ -5,8 +5,8 @@ import type { Lead, LeadSector } from "@/types/lead";
 
 export const dynamic = "force-dynamic";
 
-const FOIA_CITIES = ["Castalla", "Ibi", "Onil", "Biar", "Tibi"];
-const EXCLUDED_TERMS = ["alcoy", "alcoi"];
+const FOIA_CITIES = ["Castalla", "Ibi", "Onil", "Biar", "Tibi", "Elda", "Petrer", "Villena"];
+const EXCLUDED_TERMS = ["alcoy", "alcoi", "alicante"];
 type CityViewport = {
   low: { latitude: number; longitude: number };
   high: { latitude: number; longitude: number };
@@ -32,6 +32,18 @@ const CITY_VIEWPORTS: Record<string, CityViewport> = {
   Tibi: {
     low: { latitude: 38.48, longitude: -0.63 },
     high: { latitude: 38.57, longitude: -0.53 }
+  },
+  Elda: {
+    low: { latitude: 38.44, longitude: -0.83 },
+    high: { latitude: 38.51, longitude: -0.75 }
+  },
+  Petrer: {
+    low: { latitude: 38.45, longitude: -0.82 },
+    high: { latitude: 38.52, longitude: -0.74 }
+  },
+  Villena: {
+    low: { latitude: 38.58, longitude: -0.94 },
+    high: { latitude: 38.68, longitude: -0.82 }
   }
 };
 const DEFAULT_TYPES: LeadSector[] = [
