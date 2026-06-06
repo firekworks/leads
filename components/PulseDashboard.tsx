@@ -11,9 +11,10 @@ type PulseDashboardProps = {
 
 export function PulseDashboard({ leads, onSelect }: PulseDashboardProps) {
   const valid = leads.filter((lead) => !lead.isInvalid && !lead.isDisqualified && !["No contactar", "No encaja", "Perdido"].includes(lead.status));
-  const hot = valid.filter((lead) => lead.score >= 80);
+  const hot = valid.filter((lead) => lead.score >= 70);
   const noInstagram = valid.filter((lead) => !lead.instagramUrl);
-  const noWeb = valid.filter((lead) => !lead.website);
+  const followUps = valid.filter((lead) => lead.nextFollowUpAt && new Date(lead.nextFollowUpAt).getTime() <= Date.now() + 1000 * 60 * 60 * 24);
+  const routePending = valid.filter((lead) => lead.nextFollowUpType === "ruta" || lead.score >= 70).slice(0, 12);
   const suspect = leads.filter((lead) => lead.isInvalid || lead.isDisqualified || lead.status === "No contactar");
   const monthly = valid.reduce((total, lead) => total + estimateWeightedMonthlyValue(lead), 0);
   const priority = valid.slice().sort((a, b) => b.score - a.score).slice(0, 5);
@@ -21,65 +22,53 @@ export function PulseDashboard({ leads, onSelect }: PulseDashboardProps) {
   return (
     <section className="pulse-grid">
       <article className="pulse-hero">
-        <div>
+        <div className="pulse-hero__head">
           <span className="eyebrow">Pulse</span>
           <h2>Captación local</h2>
         </div>
-        <div className="pulse-curve" aria-hidden="true">
-          <span style={{ height: "34%" }} />
-          <span style={{ height: "50%" }} />
-          <span style={{ height: "43%" }} />
-          <span style={{ height: "66%" }} />
-          <span style={{ height: "58%" }} />
-          <span style={{ height: "78%" }} />
-          <span style={{ height: "70%" }} />
-        </div>
-        <div className="pulse-metrics">
+
+        <div className="pulse-metrics" aria-label="Resumen comercial">
           <Metric label="Válidos" value={valid.length} />
           <Metric label="Calientes" value={hot.length} />
           <Metric label="Sin IG" value={noInstagram.length} />
+          <Metric label="Potencial" value={`${monthly}€`} />
         </div>
-        <strong className="pulse-value">≈ {monthly}€/mes</strong>
       </article>
 
       <aside className="today-panel">
         <header>
           <span>Hoy</span>
-          <strong>{hot.length + noInstagram.length + suspect.length}</strong>
+          <strong>{followUps.length + noInstagram.length + suspect.length + routePending.length}</strong>
         </header>
-        <Action href="/leads?quick=hot" label="Revisar calientes" count={hot.length} />
-        <Action href="/system/data-quality" label="Limpiar descartes" count={suspect.length} />
+        <Action href="/system/data-quality" label="Revisar descartes" count={suspect.length} />
         <Action href="/leads?quick=noInstagram" label="Añadir Instagram" count={noInstagram.length} />
+        <Action href="/leads?quick=contactEasy" label="Seguimientos" count={followUps.length} />
+        <Action href="/route" label="Ruta pendiente" count={routePending.length} />
       </aside>
 
       <article className="priority-queue">
         <header>
           <span>Prioridad</span>
-          <Link href="/leads">Abrir</Link>
+          <Link href="/leads?quick=hot">Leads</Link>
         </header>
-        {priority.map((lead) => (
-          <button key={lead.id} type="button" onClick={() => onSelect(lead)}>
-            <span className={`score-pill score-pill--${scoreTone(lead.score)}`}>{lead.score}</span>
-            <strong>{lead.name}</strong>
-            <small>{lead.city} · {scoreLabel(lead.score)}</small>
-          </button>
-        ))}
-      </article>
-
-      <article className="quality-panel">
-        <header>
-          <span>Calidad</span>
-          <Link href="/system/data-quality">Datos</Link>
-        </header>
-        <QualityBar label="Sin Instagram" value={noInstagram.length} total={valid.length} />
-        <QualityBar label="Sin web" value={noWeb.length} total={valid.length} />
-        <QualityBar label="Descartes" value={suspect.length} total={leads.length} />
+        <div className="priority-list">
+          {priority.map((lead) => (
+            <button key={lead.id} type="button" onClick={() => onSelect(lead)}>
+              <span className={`score-pill score-pill--${scoreTone(lead.score)}`}>{lead.score}</span>
+              <span>
+                <strong>{lead.name}</strong>
+                <small>{lead.city}</small>
+              </span>
+              <em>{nextAction(lead)}</em>
+            </button>
+          ))}
+        </div>
       </article>
     </section>
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div>
       <span>{label}</span>
@@ -97,13 +86,9 @@ function Action({ href, label, count }: { href: string; label: string; count: nu
   );
 }
 
-function QualityBar({ label, value, total }: { label: string; value: number; total: number }) {
-  const percentage = total ? Math.min(100, Math.round((value / total) * 100)) : 0;
-  return (
-    <div className="quality-bar">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <i><b style={{ width: `${percentage}%` }} /></i>
-    </div>
-  );
+function nextAction(lead: Lead) {
+  if (lead.nextAction) return lead.nextAction;
+  if (!lead.instagramUrl) return "Buscar IG";
+  if (!lead.phone && !lead.whatsappUrl) return "Buscar tel";
+  return scoreLabel(lead.score);
 }

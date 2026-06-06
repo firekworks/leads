@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Background } from "@/components/Background";
 import { useInternalAuth } from "@/components/AuthGate";
-import { LeadCard } from "@/components/LeadCard";
-import { classifyLeadFit } from "@/lib/scoring";
+import { classifyLeadFit, scoreTone } from "@/lib/scoring";
 import { loadLeads, persistLead } from "@/lib/leads-repository";
 import type { Lead } from "@/types/lead";
 
@@ -33,9 +32,12 @@ export function DataQualityWorkspace() {
     const missingInstagram = leads.filter((lead) => !lead.instagramUrl && !lead.isInvalid);
     const missingPhone = leads.filter((lead) => !lead.phone && !lead.whatsappUrl && !lead.isInvalid);
     const missingCity = leads.filter((lead) => !lead.city);
+    const duplicateIds = duplicateLeadIds(leads);
+    const duplicates = leads.filter((lead) => duplicateIds.has(lead.id));
 
     return [
       { id: "public", label: "Públicos", leads: publicCandidates },
+      { id: "duplicates", label: "Duplicados", leads: duplicates },
       { id: "score", label: "Score sospechoso", leads: suspiciousScore },
       { id: "ig", label: "Sin IG", leads: missingInstagram },
       { id: "phone", label: "Sin teléfono", leads: missingPhone },
@@ -107,8 +109,15 @@ export function DataQualityWorkspace() {
                   <strong>{group.leads.length}</strong>
                 </header>
                 {group.leads.slice(0, 20).map((lead) => (
-                  <div className="quality-row" key={`${group.id}-${lead.id}`}>
-                    <LeadCard lead={lead} active={selected?.id === lead.id} onSelect={setSelected} />
+                  <div className={selected?.id === lead.id ? "quality-row quality-row--active" : "quality-row"} key={`${group.id}-${lead.id}`}>
+                    <button className="quality-lead" type="button" onClick={() => setSelected(lead)}>
+                      <span className={`score-pill score-pill--${scoreTone(lead.score)}`}>{lead.score}</span>
+                      <span>
+                        <strong>{lead.name}</strong>
+                        <small>{lead.city || "Sin ciudad"} · {lead.sector}</small>
+                      </span>
+                      <em>{lead.status}</em>
+                    </button>
                     <div className="quality-row__actions">
                       <button className="button button--ghost" type="button" onClick={() => confirmDiscard(lead)}>Descartar</button>
                       <button className="button button--ghost" type="button" onClick={() => restore(lead)}>Restaurar</button>
@@ -123,4 +132,26 @@ export function DataQualityWorkspace() {
       </AppShell>
     </main>
   );
+}
+
+function duplicateLeadIds(leads: Lead[]) {
+  const seen = new Map<string, string>();
+  const duplicates = new Set<string>();
+
+  for (const lead of leads) {
+    const keys = [
+      lead.placeId ? `place:${lead.placeId}` : "",
+      lead.phone ? `phone:${lead.phone}` : "",
+      lead.website ? `web:${lead.website}` : "",
+      `name:${lead.name.toLowerCase()}|${lead.city.toLowerCase()}`
+    ].filter(Boolean);
+
+    for (const key of keys) {
+      const first = seen.get(key);
+      if (first && first !== lead.id) duplicates.add(lead.id);
+      else seen.set(key, lead.id);
+    }
+  }
+
+  return duplicates;
 }

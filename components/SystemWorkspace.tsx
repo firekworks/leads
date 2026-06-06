@@ -1,54 +1,132 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Background } from "@/components/Background";
 import { useInternalAuth } from "@/components/AuthGate";
+import { loadLeads } from "@/lib/leads-repository";
+import { classifyLeadFit } from "@/lib/scoring";
+import type { Lead } from "@/types/lead";
 
 export function SystemWorkspace() {
-  const { profile } = useInternalAuth();
+  const { accessToken, profile } = useInternalAuth();
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [message, setMessage] = useState("Cargando");
+
+  useEffect(() => {
+    let active = true;
+    loadLeads(accessToken).then((result) => {
+      if (!active) return;
+      setLeads(result.leads);
+      setMessage(result.source === "supabase" ? "Guardado" : "Local");
+    });
+    return () => {
+      active = false;
+    };
+  }, [accessToken]);
+
+  const stats = useMemo(() => {
+    const publicLeads = leads.filter((lead) => classifyLeadFit(lead).disqualified || lead.isDisqualified || lead.isInvalid);
+    const duplicateKeys = duplicateLeadIds(leads);
+    return {
+      publicLeads: publicLeads.length,
+      duplicates: duplicateKeys.size,
+      noInstagram: leads.filter((lead) => !lead.instagramUrl && !lead.isInvalid).length,
+      noPhone: leads.filter((lead) => !lead.phone && !lead.whatsappUrl && !lead.isInvalid).length,
+      noCity: leads.filter((lead) => !lead.city).length,
+      suspicious: leads.filter((lead) => (classifyLeadFit(lead).disqualified || lead.isDisqualified) && lead.score > 25).length
+    };
+  }, [leads]);
 
   return (
     <main className="app">
       <Background />
-      <AppShell currentView="system" userLabel={`${profile.role} · ${profile.email}`} sourceLabel="System">
+      <AppShell currentView="system" userLabel={`${profile.role} · ${profile.email}`} sourceLabel={message}>
         <header className="workspace-header workspace-header--compact">
           <div>
-            <p className="eyebrow">SYSTEM</p>
+            <p className="eyebrow">Firekworks Leads</p>
             <h1>System</h1>
             <p className="workspace-subtitle">Datos, reglas y escaneos.</p>
           </div>
         </header>
 
-        <section className="system-grid">
-          <SystemLink href="/system/data-quality" icon="check" title="Data quality" text="Descartes, públicos, faltantes y score sospechoso." />
-          <SystemLink href="/system/scan" icon="scan" title="Scan jobs" text="Escanear zonas y guardar comercios válidos." />
-          <SystemLink href="/system/texts" icon="file" title="Snippets" text="Textos internos de Leads." />
-          <SystemInfo icon="ban" title="Reglas" text="Públicos e institucionales se envían a revisión o descarte." />
-          <SystemInfo icon="store" title="Sectores" text="Scoring por encaje, ticket y oportunidad audiovisual." />
-          <SystemInfo icon="pulse" title="Scoring" text="Encaje, demanda, brecha digital, contacto y zona." />
+        <section className="system-layout">
+          <SystemPanel title="Calidad de datos" href="/system/data-quality">
+            <SystemRow label="Públicos" value={stats.publicLeads} />
+            <SystemRow label="Duplicados" value={stats.duplicates} />
+            <SystemRow label="Sin IG" value={stats.noInstagram} />
+            <SystemRow label="Sin teléfono" value={stats.noPhone} />
+            <SystemRow label="Sin ciudad" value={stats.noCity} />
+            <SystemRow label="Score sospechoso" value={stats.suspicious} />
+          </SystemPanel>
+
+          <SystemPanel title="Escaneos" href="/system/scan">
+            <SystemRow label="Ejecutar escaneo" value="Preview" />
+            <SystemRow label="Peticiones por import" value="1" />
+            <SystemRow label="Sectores" value="16" />
+            <SystemRow label="Errores" value="Ver log" />
+          </SystemPanel>
+
+          <SystemPanel title="Reglas">
+            <SystemRow label="Descarte" value="Públicos" />
+            <SystemRow label="Sectores válidos" value="Privados" />
+            <SystemRow label="Zona foco" value="Foia" />
+            <SystemRow label="Scoring" value="Fit + demanda" />
+          </SystemPanel>
+
+          <SystemPanel title="Ajustes" href="/system/texts">
+            <SystemRow label="Snippets" value="Leads" />
+            <SystemRow label="Zonas" value="Activas" />
+            <SystemRow label="Usuario" value={profile.role} />
+            <SystemRow label="Supabase" value={message} />
+          </SystemPanel>
         </section>
       </AppShell>
     </main>
   );
 }
 
-function SystemLink({ href, icon, title, text }: { href: string; icon: string; title: string; text: string }) {
+function SystemPanel({ title, href, children }: { title: string; href?: string; children: ReactNode }) {
   return (
-    <Link href={href} className="system-card">
-      <span className={`css-icon css-icon--${icon}`} aria-hidden="true" />
-      <strong>{title}</strong>
-      <small>{text}</small>
-    </Link>
+    <article className="system-panel">
+      <header>
+        <span>{title}</span>
+        {href ? <Link href={href}>Abrir</Link> : null}
+      </header>
+      <div>{children}</div>
+    </article>
   );
 }
 
-function SystemInfo({ icon, title, text }: { icon: string; title: string; text: string }) {
+function SystemRow({ label, value }: { label: string; value: number | string }) {
   return (
-    <article className="system-card system-card--info">
-      <span className={`css-icon css-icon--${icon}`} aria-hidden="true" />
-      <strong>{title}</strong>
-      <small>{text}</small>
-    </article>
+    <div className="system-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
+}
+
+function duplicateLeadIds(leads: Lead[]) {
+  const seen = new Map<string, string>();
+  const duplicates = new Set<string>();
+
+  for (const lead of leads) {
+    const keys = [
+      lead.placeId ? `place:${lead.placeId}` : "",
+      lead.phone ? `phone:${lead.phone}` : "",
+      lead.website ? `web:${lead.website}` : "",
+      `name:${lead.name.toLowerCase()}|${lead.city.toLowerCase()}`
+    ].filter(Boolean);
+
+    for (const key of keys) {
+      const first = seen.get(key);
+      if (first && first !== lead.id) duplicates.add(lead.id);
+      else seen.set(key, lead.id);
+    }
+  }
+
+  return duplicates;
 }

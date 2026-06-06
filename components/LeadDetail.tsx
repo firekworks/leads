@@ -215,6 +215,7 @@ export function LeadDetail({
               <TextArea label="Próximo paso" value={draft.nextAction} onChange={(value) => update("nextAction", value)} />
               <div className="detail-actions detail-form__wide">
                 <button className="button button--ghost" type="button" onClick={() => update("status", "Prioritario")}>Priorizar</button>
+                <button className="button button--ghost" type="button" onClick={() => update("status", "Contactado")}>Contactado</button>
                 <button className="button button--ghost" type="button" onClick={discard}>Descartar</button>
                 <button className="button button--ghost" type="button" onClick={() => update("nextFollowUpType", "ruta")}>Añadir a ruta</button>
               </div>

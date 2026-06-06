@@ -27,6 +27,7 @@ type FiltersProps = {
   withoutWeb: boolean;
   withoutWhatsapp: boolean;
   withoutPhone: boolean;
+  contactEasyOnly: boolean;
   minScore: number;
   onQuery: (value: string) => void;
   onCity: (value: string) => void;
@@ -39,6 +40,7 @@ type FiltersProps = {
   onWithoutWeb: (value: boolean) => void;
   onWithoutWhatsapp: (value: boolean) => void;
   onWithoutPhone: (value: boolean) => void;
+  onContactEasyOnly: (value: boolean) => void;
   onMinScore: (value: number) => void;
   onSavedView?: (value: string) => void;
 };
@@ -61,6 +63,7 @@ export function Filters({
   withoutWeb,
   withoutWhatsapp,
   withoutPhone,
+  contactEasyOnly,
   minScore,
   onQuery,
   onCity,
@@ -73,6 +76,7 @@ export function Filters({
   onWithoutWeb,
   onWithoutWhatsapp,
   onWithoutPhone,
+  onContactEasyOnly,
   onMinScore,
   onSavedView
 }: FiltersProps) {
@@ -86,6 +90,7 @@ export function Filters({
         followersBucket && `IG: ${followersBucket}`,
         contentUse && `Contenido: ${contentUse}`,
         minScore ? `Score +${minScore}` : "",
+        contactEasyOnly && "Contacto fácil",
         withoutInstagram && "Sin Instagram",
         withoutFacebook && "Sin Facebook",
         withoutWeb && "Sin web",
@@ -94,6 +99,7 @@ export function Filters({
       ].filter(Boolean) as string[],
     [
       city,
+      contactEasyOnly,
       contentUse,
       followersBucket,
       minScore,
@@ -118,6 +124,7 @@ export function Filters({
     onWithoutWeb(false);
     onWithoutWhatsapp(false);
     onWithoutPhone(false);
+    onContactEasyOnly(false);
     onMinScore(0);
   }
 
@@ -140,7 +147,7 @@ export function Filters({
           <input
             value={query}
             onChange={(event) => onQuery(event.target.value)}
-            placeholder="Buscar comercio, ciudad, sector, Instagram o siguiente acción"
+            placeholder="Buscar comercio, ciudad o sector"
           />
         </label>
         <button className="button button--ghost filters__toggle" type="button" onClick={() => setOpen((value) => !value)}>
@@ -228,6 +235,14 @@ export function Filters({
           </label>
 
           <div className="filter-toggles" aria-label="Filtros de ausencia">
+            <label>
+              <input
+                type="checkbox"
+                checked={contactEasyOnly}
+                onChange={(event) => onContactEasyOnly(event.target.checked)}
+              />
+              Contacto fácil
+            </label>
             <label>
               <input
                 type="checkbox"

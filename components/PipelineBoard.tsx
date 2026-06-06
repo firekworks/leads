@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useState } from "react";
 import type { Lead, LeadStatus } from "@/types/lead";
 import { scoreLabel, scoreTone } from "@/lib/scoring";
@@ -10,7 +9,6 @@ type PipelineBoardProps = {
   selectedId: string;
   onSelect: (lead: Lead) => void;
   onStatusChange: (lead: Lead, status: LeadStatus) => void | Promise<void>;
-  renderDetail?: (lead: Lead) => ReactNode;
 };
 
 const COLUMN_PAGE_SIZE = 28;
@@ -34,7 +32,7 @@ const lanes: Array<{
   }
 ];
 
-export function PipelineBoard({ leads, selectedId, onSelect, onStatusChange, renderDetail }: PipelineBoardProps) {
+export function PipelineBoard({ leads, selectedId, onSelect, onStatusChange }: PipelineBoardProps) {
   const [columnLimits, setColumnLimits] = useState<Record<string, number>>({});
   const [draggedId, setDraggedId] = useState("");
 
@@ -101,13 +99,10 @@ export function PipelineBoard({ leads, selectedId, onSelect, onStatusChange, ren
                           <small>{lead.city} · {lead.sector}</small>
                           <em>{scoreLabel(lead.score)} · {shortStatus(lead.status)}</em>
                         </span>
-                        <span className="pipeline-card__signals">
-                          <i className={lead.instagramUrl ? "is-on" : ""}>IG</i>
-                          <i className={lead.website ? "is-on" : ""}>Web</i>
-                          <i className={lead.phone || lead.whatsappUrl ? "is-on" : ""}>Tel</i>
+                        <span className="pipeline-card__signals" aria-label="Señales">
+                          {pipelineChips(lead).map((chip) => <i key={chip}>{chip}</i>)}
                         </span>
                       </button>
-                      {selectedId === lead.id && renderDetail ? renderDetail(lead) : null}
                     </article>
                   ))}
                   {visibleLeads.length < columnLeads.length ? (
@@ -134,6 +129,15 @@ export function PipelineBoard({ leads, selectedId, onSelect, onStatusChange, ren
       })}
     </div>
   );
+}
+
+function pipelineChips(lead: Lead) {
+  const chips: string[] = [];
+  if (!lead.instagramUrl) chips.push("Sin IG");
+  if (!lead.website) chips.push("Sin web");
+  if (lead.phone || lead.whatsappUrl) chips.push("Tel");
+  if (lead.googleMapsUrl) chips.push("Maps");
+  return chips.slice(0, 2);
 }
 
 function shortStatus(status: LeadStatus) {

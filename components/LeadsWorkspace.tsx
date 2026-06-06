@@ -56,6 +56,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const [withoutWeb, setWithoutWeb] = useState(false);
   const [withoutWhatsapp, setWithoutWhatsapp] = useState(false);
   const [withoutPhone, setWithoutPhone] = useState(false);
+  const [contactEasyOnly, setContactEasyOnly] = useState(false);
   const [minScore, setMinScore] = useState(0);
   const [selectedId, setSelectedId] = useState("");
   const [visibleLeadCount, setVisibleLeadCount] = useState(PAGE_SIZE);
@@ -162,6 +163,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         (!withoutWeb || !lead.website) &&
         (!withoutWhatsapp || !lead.whatsappUrl) &&
         (!withoutPhone || !lead.phone) &&
+        (!contactEasyOnly || Boolean(lead.phone || lead.whatsappUrl)) &&
         (!minScore || lead.score >= minScore)
       );
     });
@@ -177,13 +179,14 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     withoutFacebook,
     withoutInstagram,
     withoutPhone,
+    contactEasyOnly,
     withoutWhatsapp,
     withoutWeb
   ]);
 
   useEffect(() => {
     setVisibleLeadCount(PAGE_SIZE);
-  }, [city, contentUse, followersBucket, minScore, query, sector, status, withoutFacebook, withoutInstagram, withoutPhone, withoutWhatsapp, withoutWeb]);
+  }, [city, contentUse, followersBucket, minScore, query, sector, status, withoutFacebook, withoutInstagram, withoutPhone, contactEasyOnly, withoutWhatsapp, withoutWeb]);
 
   const visibleLeads = filteredLeads.slice(0, visibleLeadCount);
   const routeStops = useMemo<RouteStop[]>(
@@ -212,18 +215,16 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     setWithoutWeb(false);
     setWithoutWhatsapp(false);
     setWithoutPhone(false);
+    setContactEasyOnly(false);
     setMinScore(0);
   }
 
   function handleQuickView(view: string) {
     clearFilters();
-    if (view === "hot") setMinScore(80);
+    if (view === "hot") setMinScore(70);
     if (view === "noInstagram") setWithoutInstagram(true);
     if (view === "noWeb") setWithoutWeb(true);
-    if (view === "contactEasy") {
-      setMinScore(60);
-      setWithoutPhone(false);
-    }
+    if (view === "contactEasy") setContactEasyOnly(true);
     if (view === "discard") setStatus("No contactar");
   }
 
@@ -415,7 +416,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
           <div>
             <p className="eyebrow">Firekworks Leads</p>
             <h1>{viewTitle(initialView)}</h1>
-            {initialView === "leads" ? <p className="workspace-subtitle">Busca, valida y prioriza comercios locales.</p> : null}
+            <p className="workspace-subtitle">{viewSubtitle(initialView)}</p>
           </div>
           <div className="header-actions">
             <span className={`source-pill source-pill--${dataSource}`}>{syncMessage}</span>
@@ -461,6 +462,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                 withoutWeb={withoutWeb}
                 withoutWhatsapp={withoutWhatsapp}
                 withoutPhone={withoutPhone}
+                contactEasyOnly={contactEasyOnly}
                 minScore={minScore}
                 savedViews={quickViews}
                 onQuery={setQuery}
@@ -474,6 +476,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                 onWithoutWeb={setWithoutWeb}
                 onWithoutWhatsapp={setWithoutWhatsapp}
                 onWithoutPhone={setWithoutPhone}
+                onContactEasyOnly={setContactEasyOnly}
                 onMinScore={setMinScore}
                 onSavedView={handleQuickView}
               />
@@ -511,8 +514,8 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                 selectedId={selectedId}
                 onSelect={handleSelect}
                 onStatusChange={handleStatusChange}
-                renderDetail={renderDetail}
               />
+              {selectedLead ? <div className="pipeline-inline-detail">{renderDetail(selectedLead)}</div> : null}
             </motion.section>
           ) : null}
 
@@ -533,6 +536,13 @@ function viewTitle(view: LeadsWorkspaceProps["initialView"]) {
   if (view === "pipeline") return "Pipeline";
   if (view === "route") return "Ruta";
   return "Leads";
+}
+
+function viewSubtitle(view: LeadsWorkspaceProps["initialView"]) {
+  if (view === "pulse") return "Prioridad comercial de hoy.";
+  if (view === "pipeline") return "Avanza leads por fase.";
+  if (view === "route") return "Planifica visitas por ciudad.";
+  return "Busca, valida y prioriza comercios locales.";
 }
 
 function uniqueOptions(values: string[]) {

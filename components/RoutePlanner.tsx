@@ -10,23 +10,47 @@ type RoutePlannerProps = {
   onMarkVisited?: (leads: RouteStop[]) => void;
 };
 
-const ROUTE_PAGE_SIZE = 70;
+const ROUTE_PAGE_SIZE = 60;
+const minScores = {
+  Revisar: 0,
+  Frío: 25,
+  Templado: 50,
+  Caliente: 70,
+  Prioritario: 85
+} as const;
+
+type MinTemperature = keyof typeof minScores | "";
 
 export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerProps) {
   const [city, setCity] = useState("");
-  const [temperature, setTemperature] = useState("");
+  const [minTemperature, setMinTemperature] = useState<MinTemperature>("");
+  const [onlyPhone, setOnlyPhone] = useState(false);
+  const [onlyMaps, setOnlyMaps] = useState(false);
+  const [sortBy, setSortBy] = useState<"score" | "nearby">("score");
   const [visibleCount, setVisibleCount] = useState(ROUTE_PAGE_SIZE);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const cities = useMemo(() => Array.from(new Set(stops.map((stop) => stop.city))).sort((a, b) => a.localeCompare(b, "es")), [stops]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const cities = useMemo(() => Array.from(new Set(stops.map((stop) => stop.city).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es")), [stops]);
 
   const filteredStops = useMemo(() => {
-    return stops.filter((stop) => {
-      const matchesCity = city ? stop.city === city : true;
-      const label = scoreLabel(stop.score);
-      const matchesTemperature = temperature ? label === temperature : true;
-      return matchesCity && matchesTemperature && !stop.isInvalid && !stop.isDisqualified;
-    });
-  }, [city, stops, temperature]);
+    const minScore = minTemperature ? minScores[minTemperature] : 0;
+    return stops
+      .filter((stop) => {
+        const matchesCity = city ? stop.city === city : true;
+        return (
+          matchesCity &&
+          stop.score >= minScore &&
+          !stop.isInvalid &&
+          !stop.isDisqualified &&
+          (!onlyPhone || Boolean(stop.phone || stop.whatsappUrl)) &&
+          (!onlyMaps || Boolean(stop.googleMapsUrl || (typeof stop.latitude === "number" && typeof stop.longitude === "number")))
+        );
+      })
+      .sort((a, b) => {
+        if (sortBy === "nearby") return `${a.city}${a.address}`.localeCompare(`${b.city}${b.address}`, "es") || b.score - a.score;
+        return b.score - a.score;
+      });
+  }, [city, minTemperature, onlyMaps, onlyPhone, sortBy, stops]);
 
   const visibleStops = filteredStops.slice(0, visibleCount);
   const selectedStops = selectedIds
@@ -35,7 +59,7 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerPro
 
   useEffect(() => {
     setVisibleCount(ROUTE_PAGE_SIZE);
-  }, [city, temperature, stops]);
+  }, [city, minTemperature, onlyMaps, onlyPhone, sortBy, stops]);
 
   useEffect(() => {
     setSelectedIds((current) => current.filter((id) => stops.some((stop) => stop.id === id)));
@@ -45,12 +69,12 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerPro
     setSelectedIds((current) => current.includes(stop.id) ? current.filter((id) => id !== stop.id) : [...current, stop.id]);
   }
 
-  function moveSelected(index: number, direction: -1 | 1) {
+  function moveSelected(from: number, to: number) {
     setSelectedIds((current) => {
+      if (to < 0 || to >= current.length) return current;
       const next = [...current];
-      const target = index + direction;
-      if (target < 0 || target >= next.length) return current;
-      [next[index], next[target]] = [next[target], next[index]];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
       return next;
     });
   }
@@ -81,81 +105,103 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerPro
   return (
     <div className="route-planner">
       <section className="route-control">
-        <div>
-          <span className="eyebrow">Ruta</span>
-          <h2>{selectedStops.length || visibleStops.length}</h2>
-        </div>
         <select value={city} onChange={(event) => setCity(event.target.value)} aria-label="Ciudad ruta">
-          <option value="">Todas</option>
+          <option value="">Ciudad</option>
           {cities.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
-        <select value={temperature} onChange={(event) => setTemperature(event.target.value)} aria-label="Temperatura ruta">
-          <option value="">Temperatura</option>
-          {["Prioritario", "Caliente", "Templado", "Frío", "Revisar"].map((item) => <option key={item} value={item}>{item}</option>)}
+        <select value={minTemperature} onChange={(event) => setMinTemperature(event.target.value as MinTemperature)} aria-label="Temperatura mínima">
+          <option value="">Temperatura mínima</option>
+          {Object.keys(minScores).map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
-        <a className="button" href={mapsUrl() || undefined} target="_blank" rel="noreferrer" aria-disabled={!visibleStops.length}>
+        <select value={sortBy} onChange={(event) => setSortBy(event.target.value as "score" | "nearby")} aria-label="Orden">
+          <option value="score">Score</option>
+          <option value="nearby">Cercanía</option>
+        </select>
+        <label>
+          <input type="checkbox" checked={onlyPhone} onChange={(event) => setOnlyPhone(event.target.checked)} />
+          Teléfono
+        </label>
+        <label>
+          <input type="checkbox" checked={onlyMaps} onChange={(event) => setOnlyMaps(event.target.checked)} />
           Maps
-        </a>
-        <button className="button button--ghost" type="button" onClick={copyList} disabled={!visibleStops.length}>
-          Copiar
-        </button>
-        <button
-          className="button button--ghost"
-          type="button"
-          onClick={() => onMarkVisited?.(selectedStops)}
-          disabled={!selectedStops.length}
-        >
-          Visitados
-        </button>
+        </label>
       </section>
 
       <div className="route-grid">
+        <section className="route-candidates" aria-label="Leads para ruta">
+          <header>
+            <span>{visibleStops.length} de {filteredStops.length}</span>
+            {visibleStops.length < filteredStops.length ? (
+              <button type="button" onClick={() => setVisibleCount((current) => current + ROUTE_PAGE_SIZE)}>Ver más</button>
+            ) : null}
+          </header>
+
+          <div className="route-stop-list">
+            {visibleStops.map((lead) => (
+              <article className="route-stop" key={lead.id}>
+                <label aria-label={`Añadir ${lead.name}`}>
+                  <input type="checkbox" checked={selectedIds.includes(lead.id)} onChange={() => toggleStop(lead)} />
+                </label>
+                <button type="button" onClick={() => onSelect(lead)}>
+                  <span>
+                    <strong>{lead.name}</strong>
+                    <small>{lead.city} · {lead.address || "Sin dirección"}</small>
+                  </span>
+                  <em>{scoreLabel(lead.score)}</em>
+                  <b className={`route-stop__score score-pill score-pill--${scoreTone(lead.score)}`}>{lead.score}</b>
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="route-selection">
           <header>
-            <span>Orden</span>
+            <span>Ruta</span>
             <strong>{selectedStops.length}</strong>
           </header>
-          {selectedStops.length ? selectedStops.map((stop, index) => (
-            <article key={stop.id} className="route-selected">
-              <strong>{index + 1}</strong>
-              <button type="button" onClick={() => onSelect(stop)}>
-                <span>{stop.name}</span>
-                <small>{stop.city} · {stop.address || "Coordenadas pendientes"}</small>
-              </button>
-              <div>
-                <button type="button" onClick={() => moveSelected(index, -1)} disabled={index === 0}>^</button>
-                <button type="button" onClick={() => moveSelected(index, 1)} disabled={index === selectedStops.length - 1}>v</button>
-              </div>
-            </article>
-          )) : (
-            <p className="empty-state">Selecciona comercios.</p>
-          )}
-        </section>
-      </div>
 
-      <div className="list-status">
-        <span>Mostrando {visibleStops.length} de {filteredStops.length}</span>
-        {visibleStops.length < filteredStops.length ? (
-          <button type="button" onClick={() => setVisibleCount((current) => current + ROUTE_PAGE_SIZE)}>Ver más</button>
-        ) : null}
-      </div>
+          <div className="route-selected-list">
+            {selectedStops.length ? selectedStops.map((stop, index) => (
+              <article
+                key={stop.id}
+                className="route-selected"
+                draggable
+                onDragStart={() => setDragIndex(index)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => {
+                  if (dragIndex !== null) moveSelected(dragIndex, index);
+                  setDragIndex(null);
+                }}
+                onDragEnd={() => setDragIndex(null)}
+              >
+                <strong>{index + 1}</strong>
+                <button type="button" onClick={() => onSelect(stop)}>
+                  <span>{stop.name}</span>
+                  <small>{stop.city} · {stop.address || "Sin dirección"}</small>
+                </button>
+                <div>
+                  <button type="button" onClick={() => moveSelected(index, index - 1)} disabled={index === 0}>↑</button>
+                  <button type="button" onClick={() => moveSelected(index, index + 1)} disabled={index === selectedStops.length - 1}>↓</button>
+                </div>
+              </article>
+            )) : (
+              <p className="empty-state">Añade leads.</p>
+            )}
+          </div>
 
-      <div className="route-stop-list">
-        {visibleStops.map((lead) => (
-          <article className="route-stop" key={lead.id}>
-            <label>
-              <input type="checkbox" checked={selectedIds.includes(lead.id)} onChange={() => toggleStop(lead)} />
-            </label>
-            <button type="button" onClick={() => onSelect(lead)}>
-              <span className={`route-stop__score score-pill score-pill--${scoreTone(lead.score)}`}>{lead.score}</span>
-              <div>
-                <strong>{lead.name}</strong>
-                <small>{lead.city} · {lead.address || "Coordenadas pendientes"}</small>
-              </div>
-              <em>{scoreLabel(lead.score)}</em>
+          <div className="route-actions">
+            <a className="button" href={mapsUrl() || undefined} target="_blank" rel="noreferrer" aria-disabled={!selectedStops.length}>
+              Abrir en Maps
+            </a>
+            <button className="button button--ghost" type="button" onClick={copyList} disabled={!selectedStops.length}>
+              Copiar ruta
             </button>
-          </article>
-        ))}
+            <button className="button button--ghost" type="button" onClick={() => onMarkVisited?.(selectedStops)} disabled={!selectedStops.length}>
+              Marcar visitados
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );

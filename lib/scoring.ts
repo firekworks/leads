@@ -93,7 +93,11 @@ const governmentTerms = [
   "seguridad social",
   "suma gestion",
   "mancomunidad",
-  "servicio publico"
+  "servicio publico",
+  "servicios municipales",
+  "municipal",
+  "oficina publica",
+  "edificio publico"
 ];
 
 const tourismPublicTerms = [
@@ -109,8 +113,11 @@ const tourismPublicTerms = [
   "casa de cultura",
   "casa cultura municipal",
   "biblioteca municipal",
+  "biblioteca publica",
   "laberinto casa tapena",
-  "casa tapena"
+  "casa tapena",
+  "centro cultural",
+  "espacio cultural municipal"
 ];
 
 const healthcarePublicTerms = [
@@ -119,7 +126,8 @@ const healthcarePublicTerms = [
   "consultorio medico auxiliar",
   "consultorio medico",
   "hospital publico",
-  "ambulatorio"
+  "ambulatorio",
+  "centro sanitario integrado"
 ];
 
 const educationPublicTerms = [
@@ -127,10 +135,23 @@ const educationPublicTerms = [
   "instituto publico",
   "ies ",
   "ceip ",
-  "escuela infantil municipal"
+  "escuela infantil municipal",
+  "escuela municipal"
 ];
 
-const emergencyTerms = ["policia", "guardia civil", "bomberos", "proteccion civil"];
+const emergencyTerms = ["policia", "policia local", "guardia civil", "bomberos", "proteccion civil"];
+const publicFacilityTerms = [
+  "ciudad deportiva municipal",
+  "polideportivo municipal",
+  "pabellon municipal",
+  "piscina municipal",
+  "campo municipal",
+  "instalacion deportiva municipal",
+  "instalaciones deportivas municipales",
+  "centro social municipal",
+  "cementerio municipal",
+  "mercado municipal"
+];
 const lowFitTerms = ["banco", "cajero", "eurocaja", "sabadell", "caixabank", "bbva", "santander"];
 
 export function computeScore(lead: Omit<Lead, "score"> | Lead) {
@@ -292,6 +313,9 @@ export function classifyLeadFit(lead: Omit<Lead, "score"> | Lead): FitResult {
   }
   if (matchesAny(haystack, governmentTerms)) {
     return disqualifiedFit("government", "Administración pública: no cliente probable.");
+  }
+  if (matchesAny(haystack, publicFacilityTerms)) {
+    return disqualifiedFit("public_entity", "Instalación pública: no cliente probable.");
   }
   if (matchesAny(haystack, tourismPublicTerms)) {
     return disqualifiedFit("tourism_public", "Turismo o espacio público: no cliente probable.");
