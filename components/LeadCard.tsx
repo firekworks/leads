@@ -14,7 +14,7 @@ type LeadCardProps = {
 export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
   const initial = lead.name.trim().slice(0, 1).toUpperCase() || "F";
   const temperature = scoreLabel(lead.score);
-  const chips = cardChips(lead);
+  const signals = cardSignals(lead);
 
   return (
     <motion.button
@@ -45,9 +45,19 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
         <small>
           {lead.city} · {lead.sector}
         </small>
-        <span className="lead-card__chips">
-          {chips.map((tag) => (
-            <span className="meta-chip" key={tag}>{tag}</span>
+        <span className="lead-card__state">
+          {shortStatus(lead.status)} · {lead.validationStatus === "validado" ? "Validado" : lead.validationStatus === "descartado" ? "Descartado" : "Pendiente de validar"}
+        </span>
+        <span className="lead-signal-row" aria-label="Señales del lead">
+          {signals.map((signal) => (
+            <span
+              className={`lead-signal lead-signal--${signal.state}`}
+              key={signal.id}
+              title={signal.label}
+              aria-label={`${signal.label}: ${signal.state}`}
+            >
+              {signal.short}
+            </span>
           ))}
         </span>
       </span>
@@ -57,22 +67,31 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
           <strong>{lead.score}</strong>
           <small>{temperature}</small>
         </span>
-        <span className={`status-pill status-pill--${statusTone(lead.status)}`}>{shortStatus(lead.status)}</span>
+        <span className={`status-pill status-pill--${statusTone(lead.status)}`}>{temperature}</span>
       </span>
     </motion.button>
   );
 }
 
-function cardChips(lead: Lead) {
-  const chips: string[] = [];
-  if (lead.isInvalid || lead.isDisqualified || lead.status === "No contactar") chips.push("Público");
-  if (!lead.instagramUrl) chips.push("Sin IG");
-  if (!lead.website) chips.push("Sin web");
-  if (lead.phone || lead.whatsappUrl) chips.push("Tel");
-  if (lead.googleMapsUrl || lead.signals.googleProfile) chips.push("Maps");
-  if (lead.reviews >= 80) chips.push("Buen fit");
-  if (lead.validationStatus === "duplicado") chips.push("Duplicado");
-  return Array.from(new Set(chips)).slice(0, 3);
+function cardSignals(lead: Lead) {
+  return [
+    signal("ig", "IG", "Instagram", Boolean(lead.instagramUrl), lead.instagramStatus === "pendiente"),
+    signal("web", "W", "Web", Boolean(lead.website), false),
+    signal("phone", "T", "Teléfono", Boolean(lead.phone || lead.whatsappUrl), false),
+    signal("maps", "M", "Google Maps", Boolean(lead.googleMapsUrl || lead.signals.googleProfile), false),
+    signal("money", "€", "Potencial estimado; facturación no verificada", Boolean(lead.adsSignal), true),
+    signal("media", "AV", "Medios", Boolean(lead.googlePhotos >= 12 || lead.contentUse === "Muy trabajado"), lead.contentUse === "Pendiente"),
+    signal("ads", "AD", "Ads", Boolean(lead.adsSignal), true)
+  ];
+}
+
+function signal(id: string, short: string, label: string, active: boolean, pending: boolean) {
+  return {
+    id,
+    short,
+    label,
+    state: active ? "active" : pending ? "pending" : "off"
+  };
 }
 
 function shortStatus(status: Lead["status"]) {

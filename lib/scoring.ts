@@ -83,6 +83,7 @@ const fitLabels: Record<FitClassification, string> = {
 const governmentTerms = [
   "ayuntamiento",
   "ajuntament",
+  "casa consistorial",
   "diputacion",
   "conselleria",
   "generalitat",
@@ -97,17 +98,21 @@ const governmentTerms = [
   "servicios municipales",
   "municipal",
   "oficina publica",
-  "edificio publico"
+  "edificio publico",
+  "oficina municipal"
 ];
 
 const tourismPublicTerms = [
   "oficina de turismo",
   "tourist info",
   "turismo municipal",
+  "informacion turistica",
   "museo municipal",
   "museo de",
   "mubio",
   "castillo de",
+  "castillo",
+  "monumento",
   "palacio-fortaleza",
   "palacio fortaleza",
   "casa de cultura",
@@ -133,6 +138,7 @@ const healthcarePublicTerms = [
 const educationPublicTerms = [
   "colegio publico",
   "instituto publico",
+  "centro publico",
   "ies ",
   "ceip ",
   "escuela infantil municipal",
@@ -152,6 +158,8 @@ const publicFacilityTerms = [
   "cementerio municipal",
   "mercado municipal"
 ];
+const closedTerms = ["cerrado permanentemente", "cerrado temporalmente", "permanently closed", "temporarily closed", "sitio cerrado"];
+const nonProfitTerms = ["asociacion", "asociación", "sin animo de lucro", "sin ánimo de lucro", "ong", "fundacion", "fundación", "caritas", "cruz roja"];
 const lowFitTerms = ["banco", "cajero", "eurocaja", "sabadell", "caixabank", "bbva", "santander"];
 
 export function computeScore(lead: Omit<Lead, "score"> | Lead) {
@@ -171,6 +179,7 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
     const baseScore = fit.classification === "duplicate" ? 10 : fit.classification === "low_fit" ? 22 : 18;
     return {
       scoreTotal: Math.min(25, baseScore),
+      scoreDemandaVisible: 0,
       scorePresenciaDigital: 0,
       scoreUrgencia: 0,
       scoreDinero: 0,
@@ -190,6 +199,10 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
   const hasPhone = Boolean(lead.phone);
   const reviews = Number(lead.reviews || 0);
   const rating = Number(lead.rating || 0);
+  const hasDemandSource = reviews > 0 || rating > 0 || lead.googlePhotos > 0;
+  const hasContactSource = hasPhone || hasWhatsapp || hasWeb || Boolean(lead.googleMapsUrl || lead.address);
+  const hasDigitalSource = hasWeb || hasInstagram || hasFacebook || hasWhatsapp || lead.contentUse !== "Pendiente";
+  const pendingEnrichment = !hasDemandSource && !hasContactSource && !hasDigitalSource && lead.enrichmentStatus !== "completo";
   const explanation: string[] = [];
   const tags: string[] = [fitLabels[fit.classification]];
 
@@ -202,6 +215,12 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
     (lead.googlePhotos < 5 ? 8 : 0);
   const scorePresenciaDigital = clampScore(digitalWeakness);
 
+  const scoreDemandaVisible = clampScore(
+    Math.min(45, reviews / 3.5) +
+      Math.min(30, rating ? rating * 6 : 0) +
+      Math.min(15, lead.googlePhotos / 2) +
+      (lead.googleMapsUrl || lead.signals.googleProfile ? 10 : 0)
+  );
   const demand = Math.min(40, reviews / 7) + Math.min(20, rating * 4);
   const urgencyGap =
     scorePresenciaDigital * 0.55 +
@@ -228,14 +247,18 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
       (rating >= 4.5 ? 10 : 0)
   );
   const scoreTotal = clampScore(
-    scorePresenciaDigital * 0.18 +
-      scoreUrgencia * 0.18 +
-      scoreDinero * 0.18 +
-      scoreFacilidadContacto * 0.13 +
-      scoreProbabilidadCierre * 0.15 +
-      scorePotencialMensualidad * 0.1 +
-      scorePrioridadVisita * 0.08
+    (pendingEnrichment ? Math.min(scoreDemandaVisible, 20) : scoreDemandaVisible) * 0.25 +
+      scoreDinero * 0.25 +
+      scorePresenciaDigital * 0.2 +
+      scoreFacilidadContacto * 0.15 +
+      scorePrioridadVisita * 0.15
   );
+  const commercialTemperature = pendingEnrichment ? Math.min(scoreTotal, 39) : scoreTotal;
+
+  if (pendingEnrichment) {
+    explanation.push("Pendiente de enriquecer: faltan fuentes suficientes para valorar temperatura comercial.");
+    tags.push("Pendiente de enriquecer");
+  }
 
   if (reviews >= 100 && rating >= 4.3) {
     explanation.push(`${rating} estrellas y ${reviews} reseñas: demanda visible.`);
@@ -264,7 +287,8 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
   if (explanation.length === 0) explanation.push("Lead detectado para validación manual de presencia digital y encaje comercial.");
 
   return {
-    scoreTotal,
+    scoreTotal: commercialTemperature,
+    scoreDemandaVisible,
     scorePresenciaDigital,
     scoreUrgencia,
     scoreDinero,
@@ -308,6 +332,9 @@ export function classifyLeadFit(lead: Omit<Lead, "score"> | Lead): FitResult {
     };
   }
 
+  if (matchesAny(haystack, closedTerms)) {
+    return disqualifiedFit("low_fit", "Sitio cerrado: no cliente probable.");
+  }
   if (matchesAny(haystack, emergencyTerms)) {
     return disqualifiedFit("emergency_service", "Servicio de emergencia: no cliente probable.");
   }
@@ -325,6 +352,9 @@ export function classifyLeadFit(lead: Omit<Lead, "score"> | Lead): FitResult {
   }
   if (matchesAny(haystack, educationPublicTerms)) {
     return disqualifiedFit("education_public", "Centro educativo público: no cliente probable.");
+  }
+  if (matchesAny(haystack, nonProfitTerms)) {
+    return disqualifiedFit("low_fit", "Asociación o entidad sin ánimo comercial evidente.");
   }
   if (matchesAny(haystack, lowFitTerms)) {
     return {
@@ -443,18 +473,17 @@ function computeLegacyScore(lead: Omit<Lead, "score"> | Lead) {
 }
 
 export function scoreLabel(score: number) {
-  if (score >= 85) return "Prioritario";
-  if (score >= 70) return "Caliente";
-  if (score >= 50) return "Templado";
-  if (score >= 25) return "Frío";
-  return "Revisar";
+  if (score >= 80) return "Muy caliente";
+  if (score >= 60) return "Caliente";
+  if (score >= 40) return "Templado";
+  return "Frío";
 }
 
 export function scoreTone(score: number) {
-  if (score >= 85) return "priority";
-  if (score >= 70) return "hot";
-  if (score >= 50) return "warm";
-  if (score >= 25) return "cold";
+  if (score >= 80) return "priority";
+  if (score >= 60) return "hot";
+  if (score >= 40) return "warm";
+  if (score >= 20) return "cold";
   return "reject";
 }
 

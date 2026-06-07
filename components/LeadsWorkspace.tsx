@@ -8,7 +8,7 @@ import { Filters } from "@/components/Filters";
 import { LeadCard } from "@/components/LeadCard";
 import { LeadDetail } from "@/components/LeadDetail";
 import { PipelineBoard } from "@/components/PipelineBoard";
-import { PulseDashboard } from "@/components/PulseDashboard";
+import { ProspectingWorkspace } from "@/components/ProspectingWorkspace";
 import { RoutePlanner } from "@/components/RoutePlanner";
 import { useInternalAuth } from "@/components/AuthGate";
 import {
@@ -22,7 +22,7 @@ import { leads as seedLeads, statuses } from "@/lib/mock-leads";
 import type { ContentUse, FollowersBucket, Lead, LeadActivity, LeadNote, LeadStatus, LeadTask, RouteStop } from "@/types/lead";
 
 type LeadsWorkspaceProps = {
-  initialView: "pulse" | "leads" | "pipeline" | "route";
+  initialView: "prospecting" | "leads" | "pipeline" | "route";
 };
 
 type EnrichResponse = Partial<Pick<Lead, "description" | "instagramUrl" | "facebookUrl" | "whatsappUrl" | "logoUrl" | "websiteTitle">> & {
@@ -387,12 +387,12 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     setSyncMessage(`${stops.length} visitados`);
   }
 
-  function renderDetail(lead: Lead) {
+  function renderDetail(lead: Lead, variant: "inline" | "panel" = "inline") {
     return (
       <LeadDetail
         lead={lead}
         statuses={statuses}
-        variant="inline"
+        variant={variant}
         onSave={handleSaveLead}
         onEnrich={handleEnrich}
         onFindOwner={handleFindOwner}
@@ -436,74 +436,87 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         </header>
 
         <AnimatePresence mode="wait">
-          {initialView === "pulse" ? (
-            <motion.section key="pulse" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <PulseDashboard leads={leadItems} onSelect={handleSelect} />
-              {selectedLead ? <div className="pulse-inline-detail">{renderDetail(selectedLead)}</div> : null}
+          {initialView === "prospecting" ? (
+            <motion.section key="prospecting" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <ProspectingWorkspace
+                leads={leadItems}
+                selectedLead={selectedLead}
+                accessToken={accessToken}
+                onSelect={handleSelect}
+                onSaveLead={handleSaveLead}
+              />
             </motion.section>
           ) : null}
 
           {initialView === "leads" ? (
-            <motion.section key="leads" className="queue-layout" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <Filters
-                cities={cities}
-                sectors={sectors}
-                statuses={statuses}
-                followersBuckets={followersBuckets}
-                contentUses={contentUses}
-                query={query}
-                city={city}
-                sector={sector}
-                status={status}
-                followersBucket={followersBucket}
-                contentUse={contentUse}
-                withoutInstagram={withoutInstagram}
-                withoutFacebook={withoutFacebook}
-                withoutWeb={withoutWeb}
-                withoutWhatsapp={withoutWhatsapp}
-                withoutPhone={withoutPhone}
-                contactEasyOnly={contactEasyOnly}
-                minScore={minScore}
-                savedViews={quickViews}
-                onQuery={setQuery}
-                onCity={setCity}
-                onSector={setSector}
-                onStatus={setStatus}
-                onFollowersBucket={setFollowersBucket}
-                onContentUse={setContentUse}
-                onWithoutInstagram={setWithoutInstagram}
-                onWithoutFacebook={setWithoutFacebook}
-                onWithoutWeb={setWithoutWeb}
-                onWithoutWhatsapp={setWithoutWhatsapp}
-                onWithoutPhone={setWithoutPhone}
-                onContactEasyOnly={setContactEasyOnly}
-                onMinScore={setMinScore}
-                onSavedView={handleQuickView}
-              />
+            <motion.section key="leads" className="queue-layout queue-layout--with-panel" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <div className="queue-primary">
+                <Filters
+                  cities={cities}
+                  sectors={sectors}
+                  statuses={statuses}
+                  followersBuckets={followersBuckets}
+                  contentUses={contentUses}
+                  query={query}
+                  city={city}
+                  sector={sector}
+                  status={status}
+                  followersBucket={followersBucket}
+                  contentUse={contentUse}
+                  withoutInstagram={withoutInstagram}
+                  withoutFacebook={withoutFacebook}
+                  withoutWeb={withoutWeb}
+                  withoutWhatsapp={withoutWhatsapp}
+                  withoutPhone={withoutPhone}
+                  contactEasyOnly={contactEasyOnly}
+                  minScore={minScore}
+                  savedViews={quickViews}
+                  onQuery={setQuery}
+                  onCity={setCity}
+                  onSector={setSector}
+                  onStatus={setStatus}
+                  onFollowersBucket={setFollowersBucket}
+                  onContentUse={setContentUse}
+                  onWithoutInstagram={setWithoutInstagram}
+                  onWithoutFacebook={setWithoutFacebook}
+                  onWithoutWeb={setWithoutWeb}
+                  onWithoutWhatsapp={setWithoutWhatsapp}
+                  onWithoutPhone={setWithoutPhone}
+                  onContactEasyOnly={setContactEasyOnly}
+                  onMinScore={setMinScore}
+                  onSavedView={handleQuickView}
+                />
 
-              <div className="lead-list lead-list--queue">
-                {filteredLeads.length ? (
-                  <>
-                    <div className="list-status">
-                      <span>{visibleLeads.length} de {filteredLeads.length}</span>
-                      {visibleLeads.length < filteredLeads.length ? (
-                        <button type="button" onClick={() => setVisibleLeadCount((current) => current + PAGE_SIZE)}>Ver más</button>
-                      ) : null}
-                    </div>
-                    {visibleLeads.map((lead) => (
-                      <div className="lead-row-shell" key={lead.id}>
-                        <LeadCard lead={lead} active={lead.id === selectedId} onSelect={handleSelect} />
-                        {lead.id === selectedId ? renderDetail(lead) : null}
+                <div className="lead-list lead-list--queue">
+                  {filteredLeads.length ? (
+                    <>
+                      <div className="list-status">
+                        <span>{visibleLeads.length} de {filteredLeads.length}</span>
+                        {visibleLeads.length < filteredLeads.length ? (
+                          <button type="button" onClick={() => setVisibleLeadCount((current) => current + PAGE_SIZE)}>Ver más</button>
+                        ) : null}
                       </div>
-                    ))}
-                  </>
-                ) : (
-                  <div className="empty-panel">
-                    <strong>Sin resultados</strong>
-                    <span>Ajusta filtros o ejecuta Scan.</span>
+                      {visibleLeads.map((lead) => (
+                        <LeadCard key={lead.id} lead={lead} active={lead.id === selectedId} onSelect={handleSelect} />
+                      ))}
+                    </>
+                  ) : (
+                    <div className="empty-panel">
+                      <strong>Sin resultados</strong>
+                      <span>Ajusta filtros o ejecuta Prospección.</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <aside className="queue-detail-panel">
+                {selectedLead ? renderDetail(selectedLead, "panel") : (
+                  <div className="empty-panel empty-panel--sticky">
+                    <strong>Selecciona un lead</strong>
+                    <span>Verás auditoría, fuentes, demo, mensajes y acciones.</span>
                   </div>
                 )}
-              </div>
+              </aside>
             </motion.section>
           ) : null}
 
@@ -532,14 +545,14 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 }
 
 function viewTitle(view: LeadsWorkspaceProps["initialView"]) {
-  if (view === "pulse") return "Pulse";
+  if (view === "prospecting") return "Prospección local";
   if (view === "pipeline") return "Pipeline";
   if (view === "route") return "Ruta";
   return "Leads";
 }
 
 function viewSubtitle(view: LeadsWorkspaceProps["initialView"]) {
-  if (view === "pulse") return "Prioridad comercial de hoy.";
+  if (view === "prospecting") return "Elige zona y nicho para encontrar comercios accionables.";
   if (view === "pipeline") return "Avanza leads por fase.";
   if (view === "route") return "Planifica visitas por ciudad.";
   return "Busca, valida y prioriza comercios locales.";

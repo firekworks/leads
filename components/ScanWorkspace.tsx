@@ -116,7 +116,7 @@ export function ScanWorkspace() {
               <div className="scan-result">
                 <strong>{payload.error ? "Revisar" : payload.mode || "Scan"}</strong>
                 <p>{payload.error || payload.message || "Búsqueda procesada."}</p>
-                <div className="pulse-metrics">
+                <div className="scan-metrics">
                   <div><span>Peticiones</span><strong>{payload.requestsUsed ?? payload.estimatedRequests ?? 0}</strong></div>
                   <div><span>Candidatos</span><strong>{payload.uniqueCandidates ?? 0}</strong></div>
                   <div><span>Guardados</span><strong>{payload.imported ?? 0}</strong></div>

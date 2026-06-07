@@ -47,12 +47,20 @@ export function SystemWorkspace() {
         <header className="workspace-header workspace-header--compact">
           <div>
             <p className="eyebrow">Firekworks Leads</p>
-            <h1>System</h1>
-            <p className="workspace-subtitle">Datos, reglas y escaneos.</p>
+            <h1>Sistema</h1>
+            <p className="workspace-subtitle">Providers, calidad de datos, escaneos y reglas.</p>
           </div>
         </header>
 
         <section className="system-layout">
+          <SystemPanel title="Providers" href="/system/providers">
+            <SystemRow label="Supabase" value={message} />
+            <SystemRow label="Google Places" value="Seguro" />
+            <SystemRow label="Google Maps" value="Cliente" />
+            <SystemRow label="Search" value="Opcional" />
+            <SystemRow label="Stats connector" value="Preparado" />
+          </SystemPanel>
+
           <SystemPanel title="Calidad de datos" href="/system/data-quality">
             <SystemRow label="Públicos" value={stats.publicLeads} />
             <SystemRow label="Duplicados" value={stats.duplicates} />
@@ -69,7 +77,7 @@ export function SystemWorkspace() {
             <SystemRow label="Errores" value="Ver log" />
           </SystemPanel>
 
-          <SystemPanel title="Reglas">
+          <SystemPanel title="Reglas de scoring" href="/system/scoring">
             <SystemRow label="Descarte" value="Públicos" />
             <SystemRow label="Sectores válidos" value="Privados" />
             <SystemRow label="Zona foco" value="Foia" />

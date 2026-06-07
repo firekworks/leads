@@ -16,7 +16,7 @@ const minScores = {
   Frío: 25,
   Templado: 50,
   Caliente: 70,
-  Prioritario: 85
+  "Muy caliente": 80
 } as const;
 
 type MinTemperature = keyof typeof minScores | "";
@@ -114,7 +114,7 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerPro
           {Object.keys(minScores).map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
         <select value={sortBy} onChange={(event) => setSortBy(event.target.value as "score" | "nearby")} aria-label="Orden">
-          <option value="score">Score</option>
+          <option value="score">Temperatura</option>
           <option value="nearby">Cercanía</option>
         </select>
         <label>

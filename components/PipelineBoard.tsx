@@ -35,10 +35,27 @@ const lanes: Array<{
 export function PipelineBoard({ leads, selectedId, onSelect, onStatusChange }: PipelineBoardProps) {
   const [columnLimits, setColumnLimits] = useState<Record<string, number>>({});
   const [draggedId, setDraggedId] = useState("");
+  const [lastMove, setLastMove] = useState<{ lead: Lead; previousStatus: LeadStatus; nextStatus: LeadStatus } | null>(null);
 
   return (
-    <div className="pipeline-board pipeline-board--compact">
-      {lanes.map((lane) => {
+    <div className="pipeline-stack">
+      {lastMove ? (
+        <div className="pipeline-undo" role="status">
+          <span>{lastMove.lead.name} movido a {shortStatus(lastMove.nextStatus)}</span>
+          <button
+            type="button"
+            onClick={() => {
+              void onStatusChange(lastMove.lead, lastMove.previousStatus);
+              setLastMove(null);
+            }}
+          >
+            Deshacer
+          </button>
+        </div>
+      ) : null}
+
+      <div className="pipeline-board pipeline-board--compact">
+        {lanes.map((lane) => {
         const columnLeads = leads.filter((lead) => lane.statuses.includes(lead.status));
         const visibleLimit = columnLimits[lane.id] || COLUMN_PAGE_SIZE;
         const visibleLeads = columnLeads.slice(0, visibleLimit);
@@ -53,7 +70,10 @@ export function PipelineBoard({ leads, selectedId, onSelect, onStatusChange }: P
               const leadId = event.dataTransfer.getData("text/plain") || draggedId;
               const lead = leads.find((item) => item.id === leadId);
               setDraggedId("");
-              if (lead && lead.status !== lane.dropStatus) void onStatusChange(lead, lane.dropStatus);
+              if (lead && lead.status !== lane.dropStatus) {
+                setLastMove({ lead, previousStatus: lead.status, nextStatus: lane.dropStatus });
+                void onStatusChange(lead, lane.dropStatus);
+              }
             }}
           >
             <header>
@@ -126,17 +146,19 @@ export function PipelineBoard({ leads, selectedId, onSelect, onStatusChange }: P
             </div>
           </section>
         );
-      })}
+        })}
+      </div>
     </div>
   );
 }
 
 function pipelineChips(lead: Lead) {
   const chips: string[] = [];
-  if (!lead.instagramUrl) chips.push("Sin IG");
-  if (!lead.website) chips.push("Sin web");
-  if (lead.phone || lead.whatsappUrl) chips.push("Tel");
-  if (lead.googleMapsUrl) chips.push("Maps");
+  if (lead.instagramUrl) chips.push("IG");
+  if (lead.website) chips.push("W");
+  if (lead.phone || lead.whatsappUrl) chips.push("T");
+  if (lead.googleMapsUrl) chips.push("M");
+  if (!chips.length) chips.push("Pendiente");
   return chips.slice(0, 2);
 }
 

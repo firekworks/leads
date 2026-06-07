@@ -4,24 +4,24 @@ import type { ReactNode } from "react";
 
 type AppShellProps = {
   children: ReactNode;
-  currentView: "pulse" | "leads" | "pipeline" | "route" | "system";
+  currentView: "prospecting" | "leads" | "pipeline" | "route" | "system";
   userLabel?: string;
   sourceLabel?: string;
 };
 
 const navItems = [
-  { href: "/pulse", id: "pulse", label: "Pulse", icon: "pulse" },
+  { href: "/prospecting", id: "prospecting", label: "Prospección", icon: "prospecting" },
   { href: "/leads", id: "leads", label: "Leads", icon: "store" },
   { href: "/pipeline", id: "pipeline", label: "Pipeline", icon: "pipeline" },
   { href: "/route", id: "route", label: "Ruta", icon: "route" },
-  { href: "/system", id: "system", label: "System", icon: "settings" }
+  { href: "/system", id: "system", label: "Sistema", icon: "settings" }
 ] as const;
 
 export function AppShell({ children, currentView, userLabel, sourceLabel }: AppShellProps) {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <Link href="/pulse" className="brand">
+        <Link href="/prospecting" className="brand">
           <span className="brand__mark">
             <Image src="/firekworks-icon.png" width={22} height={32} alt="" priority />
           </span>

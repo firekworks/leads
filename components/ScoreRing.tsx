@@ -10,7 +10,7 @@ export function ScoreRing({ score, label }: ScoreRingProps) {
     <div
       className="score-ring"
       style={{ "--score": `${score * 3.6}deg` } as CSSProperties}
-      aria-label={`Score ${score}`}
+      aria-label={`Temperatura comercial ${score}`}
     >
       <div>
         <strong>{score}</strong>
