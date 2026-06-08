@@ -1,5 +1,3 @@
-@import "tailwindcss";
-
 :root {
   --bg: #001020;
   --sidebar: #020b14;
@@ -441,11 +439,12 @@ label {
   transform: rotate(90deg);
 }
 
-.css-icon--prospecting::before,
 .css-icon--pipeline::before,
 .css-icon--route::before,
 .css-icon--settings::before,
 .css-icon--store::before,
+.css-icon--map::before,
+.css-icon--calendar::before,
 .css-icon--filter::before,
 .css-icon--instagram::before,
 .css-icon--facebook::before,
@@ -461,15 +460,6 @@ label {
   inset: 2px;
   border: 2px solid currentColor;
   border-radius: 5px;
-}
-
-.css-icon--prospecting::after {
-  left: 5px;
-  top: 8px;
-  width: 8px;
-  height: 2px;
-  background: currentColor;
-  box-shadow: 4px -4px 0 currentColor, 8px 3px 0 currentColor;
 }
 
 .css-icon--pipeline::before {
@@ -508,6 +498,30 @@ label {
   height: 4px;
   border-top: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
+}
+
+.css-icon--map::after {
+  left: 5px;
+  top: 4px;
+  width: 8px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 999px 999px 999px 0;
+  transform: rotate(-45deg);
+}
+
+.css-icon--calendar::before {
+  border-radius: 4px;
+  box-shadow: inset 0 5px 0 currentColor;
+}
+
+.css-icon--calendar::after {
+  left: 5px;
+  right: 5px;
+  top: 9px;
+  height: 2px;
+  background: currentColor;
+  box-shadow: 0 4px 0 currentColor;
 }
 
 .css-icon--filter::after {
@@ -1464,8 +1478,293 @@ label {
 }
 
 .pipeline-inline-detail,
-.route-inline-detail {
+.route-inline-detail,
+.map-inline-detail,
+.calendar-inline-detail {
   margin-top: 16px;
+}
+
+.map-workspace,
+.calendar-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.map-workspace {
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 0.38fr);
+  align-items: start;
+}
+
+.map-panel,
+.map-side,
+.calendar-hero,
+.calendar-column {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(6, 24, 39, 0.78);
+  box-shadow: var(--shadow);
+}
+
+.map-panel {
+  position: relative;
+  min-height: 560px;
+  overflow: hidden;
+}
+
+.map-real {
+  width: 100%;
+  height: 560px;
+  display: block;
+}
+
+.map-error {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  border: 1px solid rgba(231, 111, 111, 0.32);
+  border-radius: 999px;
+  background: rgba(231, 111, 111, 0.12);
+  color: #ffb1b1;
+  padding: 8px 12px;
+  font-weight: 800;
+}
+
+.map-fallback {
+  min-height: 560px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 32px;
+  text-align: center;
+  background:
+    linear-gradient(135deg, rgba(40, 224, 194, 0.12), transparent 44%),
+    radial-gradient(circle at 72% 24%, rgba(88, 166, 255, 0.12), transparent 32%),
+    rgba(255, 255, 255, 0.025);
+}
+
+.map-fallback .css-icon {
+  width: 42px;
+  height: 42px;
+  color: var(--accent);
+}
+
+.map-fallback strong {
+  font-size: 22px;
+  line-height: 28px;
+}
+
+.map-fallback p,
+.calendar-note {
+  max-width: 460px;
+  margin: 0;
+  color: var(--text-2);
+}
+
+.map-side {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.map-city-list,
+.map-lead-list {
+  display: grid;
+  gap: 8px;
+}
+
+.map-city-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.map-city-list article,
+.map-lead,
+.calendar-card {
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.map-city-list article {
+  min-height: 78px;
+  display: grid;
+  gap: 2px;
+  padding: 10px;
+}
+
+.map-city-list span {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 800;
+}
+
+.map-city-list strong {
+  font-size: 24px;
+  line-height: 28px;
+}
+
+.map-city-list small,
+.map-lead small,
+.calendar-card small {
+  color: var(--muted);
+}
+
+.map-lead {
+  width: 100%;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  padding: 9px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-lead--active {
+  border-color: var(--border-active);
+  background: rgba(40, 224, 194, 0.08);
+}
+
+.map-lead > span:last-child,
+.calendar-card button > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.map-lead strong,
+.calendar-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-hero {
+  min-height: 140px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+.calendar-hero h2 {
+  margin: 4px 0 2px;
+  font-size: 44px;
+  line-height: 48px;
+}
+
+.calendar-hero p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.calendar-hero > strong {
+  width: 86px;
+  height: 86px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  background: rgba(40, 224, 194, 0.13);
+  color: var(--accent);
+  font-size: 34px;
+  line-height: 40px;
+}
+
+.calendar-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.calendar-column {
+  min-height: 420px;
+  padding: 14px;
+}
+
+.calendar-column header {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.calendar-column header span {
+  color: var(--text-2);
+  font-weight: 900;
+}
+
+.calendar-column header strong {
+  min-width: 32px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.calendar-column > div {
+  display: grid;
+  gap: 9px;
+}
+
+.calendar-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.calendar-card > button {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-card p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.calendar-card > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.calendar-card > div button {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-2);
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.calendar-note {
+  justify-self: start;
+  border: 1px solid rgba(243, 184, 75, 0.24);
+  border-radius: 999px;
+  background: rgba(243, 184, 75, 0.1);
+  color: var(--warning);
+  padding: 8px 12px;
+  font-weight: 800;
 }
 
 .route-planner {
@@ -1891,156 +2190,6 @@ label {
   box-shadow: 0 16px 36px rgba(40, 224, 194, 0.2);
 }
 
-.prospecting {
-  display: grid;
-  gap: 18px;
-}
-
-.prospecting-stepper {
-  display: grid;
-  grid-template-columns: repeat(11, minmax(72px, 1fr));
-  gap: 8px;
-  margin: 0;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  background: rgba(0, 9, 18, 0.72);
-  overflow-x: auto;
-}
-
-.prospecting-stepper li {
-  min-width: 72px;
-  display: grid;
-  justify-items: center;
-  gap: 7px;
-  color: var(--muted);
-  list-style: none;
-}
-
-.prospecting-stepper span {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.prospecting-stepper strong {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  line-height: 14px;
-}
-
-.prospecting-stepper .is-done span,
-.prospecting-stepper .is-active span {
-  border-color: rgba(40, 224, 194, 0.56);
-  background: rgba(40, 224, 194, 0.16);
-  color: var(--accent);
-  box-shadow: 0 0 28px rgba(40, 224, 194, 0.16);
-}
-
-.prospecting-stepper .is-active strong {
-  color: var(--text);
-}
-
-.prospecting-wizard {
-  display: grid;
-  gap: 22px;
-  padding: 28px;
-}
-
-.prospecting-wizard__intro h2,
-.prospecting-scan h2 {
-  margin: 8px 0 0;
-  font-size: clamp(40px, 6vw, 74px);
-  line-height: 0.94;
-  font-weight: 780;
-}
-
-.prospecting-wizard__intro p,
-.prospecting-scan p,
-.prospecting-map p {
-  max-width: 680px;
-  margin: 10px 0 0;
-  color: var(--text-2);
-}
-
-.prospecting-selectors {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.sector-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.sector-card {
-  min-height: 96px;
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
-  padding: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.sector-card span {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  background: rgba(40, 224, 194, 0.1);
-  color: var(--accent);
-  font-weight: 900;
-}
-
-.sector-card strong,
-.sector-card small {
-  grid-column: 2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sector-card small {
-  color: var(--muted);
-}
-
-.sector-card--active {
-  border-color: rgba(40, 224, 194, 0.48);
-  background: rgba(40, 224, 194, 0.1);
-}
-
-.prospecting-cta {
-  justify-self: center;
-  min-width: min(100%, 320px);
-}
-
-.prospecting-scan {
-  min-height: 430px;
-  display: grid;
-  place-items: center;
-  gap: 16px;
-  padding: 34px;
-  text-align: center;
-}
-
 .scan-orb {
   width: 118px;
   height: 118px;
@@ -2069,17 +2218,6 @@ label {
   padding: 7px 11px;
   font-size: 12px;
   font-weight: 800;
-}
-
-.prospecting-results {
-  display: grid;
-  gap: 16px;
-}
-
-.prospecting-metrics {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
 }
 
 .metric-card {
@@ -2121,143 +2259,11 @@ label {
   color: var(--accent);
 }
 
-.prospecting-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.44fr);
-  gap: 16px;
-  align-items: stretch;
-}
-
-.prospecting-map,
-.prospecting-list,
-.prospecting-audit {
-  padding: 16px;
-}
-
-.prospecting-map header,
-.prospecting-list header,
 .provider-card header {
   display: flex;
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 12px;
-}
-
-.map-canvas {
-  position: relative;
-  min-height: 440px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  background:
-    linear-gradient(rgba(40, 224, 194, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(88, 166, 255, 0.08) 1px, transparent 1px),
-    radial-gradient(circle at 50% 46%, rgba(40, 224, 194, 0.16), transparent 35%),
-    #061827;
-  background-size: 54px 54px, 54px 54px, auto, auto;
-}
-
-.map-pin {
-  position: absolute;
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 900;
-  transform: translate(-50%, -50%);
-  cursor: pointer;
-}
-
-.map-pin--priority,
-.map-pin--hot {
-  background: rgba(243, 184, 75, 0.22);
-  border-color: rgba(243, 184, 75, 0.6);
-  color: var(--warning);
-}
-
-.map-pin--priority {
-  background: rgba(40, 224, 194, 0.24);
-  border-color: rgba(40, 224, 194, 0.7);
-  color: var(--accent);
-}
-
-.map-pin--warm {
-  background: rgba(88, 166, 255, 0.18);
-  border-color: rgba(88, 166, 255, 0.52);
-  color: #8cc4ff;
-}
-
-.map-pin--cold {
-  color: var(--text-2);
-}
-
-.map-pin--reject {
-  color: #ffb1b1;
-  border-color: rgba(231, 111, 111, 0.36);
-}
-
-.map-pin--active {
-  box-shadow: 0 0 0 8px rgba(40, 224, 194, 0.12), 0 0 34px rgba(40, 224, 194, 0.32);
-}
-
-.prospecting-leads {
-  max-height: 520px;
-  display: grid;
-  gap: 8px;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.prospecting-lead {
-  width: 100%;
-  min-height: 66px;
-  display: grid;
-  grid-template-columns: 58px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text);
-  padding: 9px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.prospecting-lead--active {
-  border-color: var(--border-active);
-  background: rgba(40, 224, 194, 0.09);
-}
-
-.prospecting-lead strong,
-.prospecting-lead small,
-.prospecting-lead em {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.prospecting-lead small,
-.prospecting-lead em {
-  color: var(--muted);
-  font-style: normal;
-}
-
-.prospecting-audit {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-}
-
-.prospecting-audit h3 {
-  margin: 4px 0;
-  font-size: 24px;
-  line-height: 30px;
 }
 
 .audit-score {
@@ -2315,7 +2321,7 @@ label {
 }
 
 .audit-reasons,
-.prospecting-actions {
+.detail-actions {
   grid-column: 1 / -1;
 }
 
@@ -2559,7 +2565,8 @@ label {
     padding: 32px;
   }
 
-  .prospecting-main,
+  .map-workspace,
+  .calendar-columns,
   .queue-layout--with-panel,
   .route-grid,
   .scan-module,
@@ -2571,13 +2578,15 @@ label {
     grid-template-columns: 1fr;
   }
 
-  .providers-grid,
-  .sector-grid,
-  .prospecting-metrics {
+  .providers-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .queue-detail-panel {
+    position: static;
+  }
+
+  .map-side {
     position: static;
   }
 
@@ -2637,7 +2646,7 @@ label {
   .detail-summary,
   .detail-form,
   .scan-metrics,
-  .prospecting-selectors,
+  .map-city-list,
   .audit-grid,
   .decision-grid,
   .source-list,
@@ -2709,9 +2718,15 @@ label {
   .social-row,
   .auth-check__panel,
   .providers-grid,
-  .sector-grid,
-  .prospecting-metrics,
+  .calendar-hero,
   .audit-line {
     grid-template-columns: 1fr;
+  }
+
+  .map-panel,
+  .map-real,
+  .map-fallback {
+    min-height: 420px;
+    height: 420px;
   }
 }

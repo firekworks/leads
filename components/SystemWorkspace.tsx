@@ -48,17 +48,18 @@ export function SystemWorkspace() {
           <div>
             <p className="eyebrow">Firekworks Leads</p>
             <h1>Sistema</h1>
-            <p className="workspace-subtitle">Providers, calidad de datos, escaneos y reglas.</p>
+            <p className="workspace-subtitle">Integraciones, calidad, scoring, textos y Stats.</p>
           </div>
         </header>
 
         <section className="system-layout">
-          <SystemPanel title="Providers" href="/system/providers">
+          <SystemPanel title="Integraciones" href="/system/providers">
             <SystemRow label="Supabase" value={message} />
-            <SystemRow label="Google Places" value="Seguro" />
-            <SystemRow label="Google Maps" value="Cliente" />
+            <SystemRow label="Google Places" value="Limitado" />
+            <SystemRow label="Google Maps" value="Real" />
+            <SystemRow label="Google Calendar" value="Pendiente" />
+            <SystemRow label="Meta / IG" value="Futuro" />
             <SystemRow label="Search" value="Opcional" />
-            <SystemRow label="Stats connector" value="Preparado" />
           </SystemPanel>
 
           <SystemPanel title="Calidad de datos" href="/system/data-quality">
@@ -70,25 +71,32 @@ export function SystemWorkspace() {
             <SystemRow label="Score sospechoso" value={stats.suspicious} />
           </SystemPanel>
 
-          <SystemPanel title="Escaneos" href="/system/scan">
-            <SystemRow label="Ejecutar escaneo" value="Preview" />
-            <SystemRow label="Peticiones por import" value="1" />
-            <SystemRow label="Sectores" value="16" />
-            <SystemRow label="Errores" value="Ver log" />
-          </SystemPanel>
-
-          <SystemPanel title="Reglas de scoring" href="/system/scoring">
+          <SystemPanel title="Scoring" href="/system/scoring">
             <SystemRow label="Descarte" value="Públicos" />
             <SystemRow label="Sectores válidos" value="Privados" />
             <SystemRow label="Zona foco" value="Foia" />
-            <SystemRow label="Scoring" value="Fit + demanda" />
+            <SystemRow label="Temperatura" value="Fit + demanda" />
           </SystemPanel>
 
-          <SystemPanel title="Ajustes" href="/system/texts">
+          <SystemPanel title="Textos comerciales" href="/system/texts">
             <SystemRow label="Snippets" value="Leads" />
-            <SystemRow label="Zonas" value="Activas" />
+            <SystemRow label="WhatsApp" value="Plantillas" />
+            <SystemRow label="Instagram" value="Plantillas" />
             <SystemRow label="Usuario" value={profile.role} />
-            <SystemRow label="Supabase" value={message} />
+          </SystemPanel>
+
+          <SystemPanel title="Importación" href="/system/scan">
+            <SystemRow label="Modo seguro" value="Preview" />
+            <SystemRow label="Google Places" value="1 búsqueda" />
+            <SystemRow label="Enriquecimiento" value="Web/redes" />
+            <SystemRow label="Sin coste automático" value="Activo" />
+          </SystemPanel>
+
+          <SystemPanel title="Stats">
+            <SystemRow label="Separación visual" value="Activa" />
+            <SystemRow label="Clientes activos" value="No visible" />
+            <SystemRow label="Conversión lead" value="Preparada" />
+            <SystemRow label="Conector" value="Interno" />
           </SystemPanel>
         </section>
       </AppShell>

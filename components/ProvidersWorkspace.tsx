@@ -40,7 +40,7 @@ export function ProvidersWorkspace() {
         <header className="workspace-header workspace-header--compact">
           <div>
             <p className="eyebrow">Sistema</p>
-            <h1>Providers</h1>
+            <h1>Integraciones</h1>
             <p className="workspace-subtitle">Conexiones preparadas sin ejecutar llamadas de coste en el test.</p>
           </div>
         </header>

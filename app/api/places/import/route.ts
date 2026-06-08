@@ -5,7 +5,7 @@ import type { Lead, LeadSector } from "@/types/lead";
 
 export const dynamic = "force-dynamic";
 
-const SCAN_CITIES = ["Castalla", "Ibi", "Onil", "Alcoy", "Biar", "Tibi", "Elda", "Petrer", "Villena", "Alicante", "Valencia"];
+const SCAN_CITIES = ["Castalla", "Ibi", "Onil", "Tibi", "Biar", "Sax", "Elda", "Petrer", "Alcoy"];
 type CityViewport = {
   low: { latitude: number; longitude: number };
   high: { latitude: number; longitude: number };
@@ -32,6 +32,10 @@ const CITY_VIEWPORTS: Record<string, CityViewport> = {
     low: { latitude: 38.48, longitude: -0.63 },
     high: { latitude: 38.57, longitude: -0.53 }
   },
+  Sax: {
+    low: { latitude: 38.50, longitude: -0.86 },
+    high: { latitude: 38.58, longitude: -0.78 }
+  },
   Elda: {
     low: { latitude: 38.44, longitude: -0.83 },
     high: { latitude: 38.51, longitude: -0.75 }
@@ -40,21 +44,9 @@ const CITY_VIEWPORTS: Record<string, CityViewport> = {
     low: { latitude: 38.45, longitude: -0.82 },
     high: { latitude: 38.52, longitude: -0.74 }
   },
-  Villena: {
-    low: { latitude: 38.58, longitude: -0.94 },
-    high: { latitude: 38.68, longitude: -0.82 }
-  },
   Alcoy: {
     low: { latitude: 38.66, longitude: -0.54 },
     high: { latitude: 38.74, longitude: -0.43 }
-  },
-  Alicante: {
-    low: { latitude: 38.30, longitude: -0.56 },
-    high: { latitude: 38.40, longitude: -0.40 }
-  },
-  Valencia: {
-    low: { latitude: 39.41, longitude: -0.46 },
-    high: { latitude: 39.53, longitude: -0.28 }
   }
 };
 const DEFAULT_TYPES: LeadSector[] = [
@@ -109,6 +101,7 @@ type GooglePlace = {
   nationalPhoneNumber?: string;
   businessStatus?: string;
   types?: string[];
+  location?: { latitude?: number; longitude?: number };
 };
 
 type PlacesSearchResult = {
@@ -301,6 +294,7 @@ async function searchPlacesPage({
         "places.nationalPhoneNumber",
         "places.businessStatus",
         "places.types",
+        "places.location",
         "nextPageToken"
       ].join(",")
     },
@@ -374,6 +368,8 @@ function placeToLead(place: GooglePlace, city: string, sector: string): Lead {
     reviews,
     googlePhotos: 0,
     placeId: place.id || "",
+    latitude: Number.isFinite(place.location?.latitude) ? Number(place.location?.latitude) : null,
+    longitude: Number.isFinite(place.location?.longitude) ? Number(place.location?.longitude) : null,
     source: "google_places",
     isInvalid: isClosed,
     invalidReason: isClosed ? "Cerrado permanentemente en Google Places" : "",

@@ -9,7 +9,7 @@ App interna para localizar, puntuar y priorizar comercios locales antes de visit
 - Interfaz dark premium con Inicio, Leads, Pipeline, Ruta, Importar, Descartados y Ajustes.
 - Vista de leads con jerarquía visual, temperatura, estimación mensual, vistas rápidas, filtros y ausencia de Instagram/Facebook/web/WhatsApp/teléfono.
 - Pipeline Kanban con arrastre entre estados y guardado automático.
-- Ruta de visitas clickable preparada para Castalla, Ibi, Onil, Biar, Tibi, Elda, Petrer y Villena.
+- Ruta de visitas clickable preparada para Castalla, Ibi, Onil, Tibi, Biar, Sax, Elda, Petrer y Alcoy como secundario.
 - Supabase como base central detrás de `/api/leads`, con fallback temporal a `localStorage`.
 - Audit logs y tablas CRM para actividades, tareas, notas, scoring y conversión a cliente.
 - Enriquecimiento web/redes en `app/api/enrich/route.ts`.

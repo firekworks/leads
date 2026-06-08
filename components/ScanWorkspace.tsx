@@ -6,7 +6,7 @@ import { Background } from "@/components/Background";
 import { useInternalAuth } from "@/components/AuthGate";
 import type { Lead } from "@/types/lead";
 
-const cities = ["Castalla", "Ibi", "Onil", "Alcoy", "Biar", "Tibi", "Elda", "Petrer", "Villena", "Alicante", "Valencia"];
+const cities = ["Castalla", "Ibi", "Onil", "Tibi", "Biar", "Sax", "Elda", "Petrer", "Alcoy"];
 const sectors = [
   "Restaurantes",
   "Cafeterías",

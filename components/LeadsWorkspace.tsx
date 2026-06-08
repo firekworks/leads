@@ -7,8 +7,9 @@ import { Background } from "@/components/Background";
 import { Filters } from "@/components/Filters";
 import { LeadCard } from "@/components/LeadCard";
 import { LeadDetail } from "@/components/LeadDetail";
+import { CalendarWorkspace } from "@/components/CalendarWorkspace";
+import { MapWorkspace } from "@/components/MapWorkspace";
 import { PipelineBoard } from "@/components/PipelineBoard";
-import { ProspectingWorkspace } from "@/components/ProspectingWorkspace";
 import { RoutePlanner } from "@/components/RoutePlanner";
 import { useInternalAuth } from "@/components/AuthGate";
 import {
@@ -22,7 +23,7 @@ import { leads as seedLeads, statuses } from "@/lib/mock-leads";
 import type { ContentUse, FollowersBucket, Lead, LeadActivity, LeadNote, LeadStatus, LeadTask, RouteStop } from "@/types/lead";
 
 type LeadsWorkspaceProps = {
-  initialView: "prospecting" | "leads" | "pipeline" | "route";
+  initialView: "leads" | "map" | "route" | "pipeline" | "calendar";
 };
 
 type EnrichResponse = Partial<Pick<Lead, "description" | "instagramUrl" | "facebookUrl" | "whatsappUrl" | "logoUrl" | "websiteTitle">> & {
@@ -31,7 +32,7 @@ type EnrichResponse = Partial<Pick<Lead, "description" | "instagramUrl" | "faceb
 
 const followersBuckets: FollowersBucket[] = ["Pendiente", "Sin cuenta", "< 1.000", "1.000 - 5.000", "+5.000"];
 const contentUses: ContentUse[] = ["Pendiente", "Sin uso", "Flojo", "Activo", "Muy trabajado"];
-const targetCities = ["Castalla", "Ibi", "Onil", "Alcoy", "Biar", "Tibi", "Elda", "Petrer", "Villena", "Alicante", "Valencia"];
+const targetCities = ["Castalla", "Ibi", "Onil", "Tibi", "Biar", "Sax", "Elda", "Petrer", "Alcoy"];
 const PAGE_SIZE = 70;
 const quickViews = [
   { id: "all", label: "Todo", icon: "store" },
@@ -313,7 +314,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
       const response = await fetch("/api/places/owner", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ placeId: lead.placeId, allowPaidRequests: true })
+        body: JSON.stringify({ placeId: lead.placeId, allowPaidRequests: false })
       });
       const payload = (await response.json()) as { candidates?: string[]; error?: string };
       if (!response.ok) throw new Error(payload.error || "No se pudieron revisar reseñas");
@@ -387,6 +388,50 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     setSyncMessage(`${stops.length} visitados`);
   }
 
+  async function handleSaveRoute(stops: RouteStop[]) {
+    if (!stops.length) return;
+    try {
+      const response = await fetch("/api/route/create", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          city: stops[0]?.city || "",
+          leadIds: stops.map((stop) => stop.id),
+          name: `Ruta ${new Date().toLocaleDateString("es-ES")} · ${stops[0]?.city || "Foia"}`
+        })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo guardar ruta");
+      setSyncMessage("Ruta guardada");
+    } catch (error) {
+      setSyncMessage(error instanceof Error ? error.message : "No se pudo guardar ruta");
+    }
+  }
+
+  async function handleMarkContacted(lead: Lead) {
+    await handleSaveLead({
+      ...lead,
+      status: lead.status === "Ganado" ? lead.status : "Contactado",
+      lastContact: "Contactado",
+      nextAction: lead.nextAction || "Seguimiento",
+      nextFollowUpAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(),
+      nextFollowUpType: "seguimiento",
+      updatedAt: new Date().toISOString()
+    });
+    setSyncMessage("Seguimiento marcado");
+  }
+
+  async function handleCreateCalendarTask(lead: Lead) {
+    await handleSaveLead({
+      ...lead,
+      nextAction: lead.nextAction || "Preparar contacto",
+      nextFollowUpAt: lead.nextFollowUpAt || new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
+      nextFollowUpType: lead.nextFollowUpType || "visita",
+      updatedAt: new Date().toISOString()
+    });
+    setSyncMessage("Acción agendada");
+  }
+
   function renderDetail(lead: Lead, variant: "inline" | "panel" = "inline") {
     return (
       <LeadDetail
@@ -404,6 +449,46 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         notes={selectedId === lead.id ? leadCrm.notes : []}
         enriching={enrichingId === lead.id}
         findingOwner={findingOwnerId === lead.id}
+      />
+    );
+  }
+
+  function renderFilters() {
+    return (
+      <Filters
+        cities={cities}
+        sectors={sectors}
+        statuses={statuses}
+        followersBuckets={followersBuckets}
+        contentUses={contentUses}
+        query={query}
+        city={city}
+        sector={sector}
+        status={status}
+        followersBucket={followersBucket}
+        contentUse={contentUse}
+        withoutInstagram={withoutInstagram}
+        withoutFacebook={withoutFacebook}
+        withoutWeb={withoutWeb}
+        withoutWhatsapp={withoutWhatsapp}
+        withoutPhone={withoutPhone}
+        contactEasyOnly={contactEasyOnly}
+        minScore={minScore}
+        savedViews={quickViews}
+        onQuery={setQuery}
+        onCity={setCity}
+        onSector={setSector}
+        onStatus={setStatus}
+        onFollowersBucket={setFollowersBucket}
+        onContentUse={setContentUse}
+        onWithoutInstagram={setWithoutInstagram}
+        onWithoutFacebook={setWithoutFacebook}
+        onWithoutWeb={setWithoutWeb}
+        onWithoutWhatsapp={setWithoutWhatsapp}
+        onWithoutPhone={setWithoutPhone}
+        onContactEasyOnly={setContactEasyOnly}
+        onMinScore={setMinScore}
+        onSavedView={handleQuickView}
       />
     );
   }
@@ -436,56 +521,10 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         </header>
 
         <AnimatePresence mode="wait">
-          {initialView === "prospecting" ? (
-            <motion.section key="prospecting" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <ProspectingWorkspace
-                leads={leadItems}
-                selectedLead={selectedLead}
-                accessToken={accessToken}
-                onSelect={handleSelect}
-                onSaveLead={handleSaveLead}
-              />
-            </motion.section>
-          ) : null}
-
           {initialView === "leads" ? (
             <motion.section key="leads" className="queue-layout queue-layout--with-panel" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
               <div className="queue-primary">
-                <Filters
-                  cities={cities}
-                  sectors={sectors}
-                  statuses={statuses}
-                  followersBuckets={followersBuckets}
-                  contentUses={contentUses}
-                  query={query}
-                  city={city}
-                  sector={sector}
-                  status={status}
-                  followersBucket={followersBucket}
-                  contentUse={contentUse}
-                  withoutInstagram={withoutInstagram}
-                  withoutFacebook={withoutFacebook}
-                  withoutWeb={withoutWeb}
-                  withoutWhatsapp={withoutWhatsapp}
-                  withoutPhone={withoutPhone}
-                  contactEasyOnly={contactEasyOnly}
-                  minScore={minScore}
-                  savedViews={quickViews}
-                  onQuery={setQuery}
-                  onCity={setCity}
-                  onSector={setSector}
-                  onStatus={setStatus}
-                  onFollowersBucket={setFollowersBucket}
-                  onContentUse={setContentUse}
-                  onWithoutInstagram={setWithoutInstagram}
-                  onWithoutFacebook={setWithoutFacebook}
-                  onWithoutWeb={setWithoutWeb}
-                  onWithoutWhatsapp={setWithoutWhatsapp}
-                  onWithoutPhone={setWithoutPhone}
-                  onContactEasyOnly={setContactEasyOnly}
-                  onMinScore={setMinScore}
-                  onSavedView={handleQuickView}
-                />
+                {renderFilters()}
 
                 <div className="lead-list lead-list--queue">
                   {filteredLeads.length ? (
@@ -503,7 +542,7 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   ) : (
                     <div className="empty-panel">
                       <strong>Sin resultados</strong>
-                      <span>Ajusta filtros o ejecuta Prospección.</span>
+                      <span>Ajusta filtros o revisa comercios pendientes.</span>
                     </div>
                   )}
                 </div>
@@ -517,6 +556,14 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                   </div>
                 )}
               </aside>
+            </motion.section>
+          ) : null}
+
+          {initialView === "map" ? (
+            <motion.section key="map" className="map-view" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              {renderFilters()}
+              <MapWorkspace leads={filteredLeads} selectedId={selectedId} onSelect={handleSelect} />
+              {selectedLead ? <div className="map-inline-detail">{renderDetail(selectedLead)}</div> : null}
             </motion.section>
           ) : null}
 
@@ -534,8 +581,20 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 
           {initialView === "route" ? (
             <motion.section key="route" className="route-view" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <RoutePlanner stops={routeStops} onSelect={handleSelect} onMarkVisited={handleRouteVisited} />
+              <RoutePlanner stops={routeStops} onSelect={handleSelect} onMarkVisited={handleRouteVisited} onSaveRoute={handleSaveRoute} />
               {selectedLead ? <div className="route-inline-detail">{renderDetail(selectedLead)}</div> : null}
+            </motion.section>
+          ) : null}
+
+          {initialView === "calendar" ? (
+            <motion.section key="calendar" className="calendar-view" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <CalendarWorkspace
+                leads={leadItems}
+                onSelect={handleSelect}
+                onMarkContacted={handleMarkContacted}
+                onCreateTask={handleCreateCalendarTask}
+              />
+              {selectedLead ? <div className="calendar-inline-detail">{renderDetail(selectedLead)}</div> : null}
             </motion.section>
           ) : null}
         </AnimatePresence>
@@ -545,17 +604,19 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 }
 
 function viewTitle(view: LeadsWorkspaceProps["initialView"]) {
-  if (view === "prospecting") return "Prospección local";
+  if (view === "map") return "Prospección";
   if (view === "pipeline") return "Pipeline";
   if (view === "route") return "Ruta";
-  return "Leads";
+  if (view === "calendar") return "Calendario";
+  return "Comercios";
 }
 
 function viewSubtitle(view: LeadsWorkspaceProps["initialView"]) {
-  if (view === "prospecting") return "Elige zona y nicho para encontrar comercios accionables.";
-  if (view === "pipeline") return "Avanza leads por fase.";
+  if (view === "map") return "Radar local sobre la base real de comercios.";
+  if (view === "pipeline") return "Avanza comercios por fase.";
   if (view === "route") return "Planifica visitas por ciudad.";
-  return "Busca, valida y prioriza comercios locales.";
+  if (view === "calendar") return "Seguimientos y visitas comerciales.";
+  return "Prioriza visitas locales con datos útiles.";
 }
 
 function uniqueOptions(values: string[]) {

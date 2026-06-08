@@ -26,7 +26,7 @@ type LeadDetailProps = {
 
 const followersBuckets: FollowersBucket[] = ["Pendiente", "Sin cuenta", "< 1.000", "1.000 - 5.000", "+5.000"];
 const contentUses: ContentUse[] = ["Pendiente", "Sin uso", "Flojo", "Activo", "Muy trabajado"];
-const tabs = ["Resumen", "Auditoría", "Fuentes", "Demo", "Mensajes", "Acciones"] as const;
+const tabs = ["Resumen", "Auditoría", "Fuentes", "Propuesta", "Seguimiento", "Acciones"] as const;
 type DetailTab = (typeof tabs)[number];
 
 export function LeadDetail({
@@ -241,24 +241,24 @@ export function LeadDetail({
           </section>
         ) : null}
 
-        {activeTab === "Demo" ? (
+        {activeTab === "Propuesta" ? (
           <section className="detail-section detail-section--wide">
-            <h3>Demo comercial</h3>
+            <h3>Propuesta presencial</h3>
             <div className="demo-grid">
               <DemoBlock title="Problema" text={draft.problemDetected || demo.problem} />
               <DemoBlock title="Oportunidad" text={draft.opportunityDetected || demo.opportunity} />
               <DemoBlock title="Propuesta Firekworks" text={draft.recommendedService || demo.proposal} />
-              <DemoBlock title="Landing" text={demo.landing} />
-              <DemoBlock title="Meta Ads" text={demo.ads} />
-              <DemoBlock title="CTA" text={demo.cta} />
+              <DemoBlock title="Pack" text={plan.name} />
+              <DemoBlock title="Ads" text={demo.ads} />
+              <DemoBlock title="Siguiente paso" text={demo.cta} />
             </div>
-            <button className="button button--primary" type="button" onClick={generateDemo}>Generar demo</button>
+            <button className="button button--primary" type="button" onClick={generateDemo}>Generar propuesta</button>
           </section>
         ) : null}
 
-        {activeTab === "Mensajes" ? (
+        {activeTab === "Seguimiento" ? (
           <section className="detail-section detail-section--wide">
-            <h3>Mensajes de venta</h3>
+            <h3>Seguimiento</h3>
             <MessageBlock title="WhatsApp" text={draft.suggestedWhatsappMessage || messages.whatsapp} onCopy={copyText} />
             <MessageBlock title="Instagram DM" text={draft.suggestedInstagramMessage || messages.instagram} onCopy={copyText} />
             <MessageBlock title="Visita presencial" text={draft.inPersonArgument || messages.visit} onCopy={copyText} />

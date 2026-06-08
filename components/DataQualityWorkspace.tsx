@@ -86,7 +86,7 @@ export function DataQualityWorkspace() {
         <header className="workspace-header workspace-header--compact">
           <div>
             <p className="eyebrow">SYSTEM</p>
-            <h1>Data quality</h1>
+            <h1>Calidad de datos</h1>
             <p className="workspace-subtitle">Revisa descartes y datos incompletos.</p>
           </div>
         </header>

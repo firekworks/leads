@@ -8,6 +8,7 @@ type RoutePlannerProps = {
   stops: RouteStop[];
   onSelect: (lead: RouteStop) => void;
   onMarkVisited?: (leads: RouteStop[]) => void;
+  onSaveRoute?: (leads: RouteStop[]) => void;
 };
 
 const ROUTE_PAGE_SIZE = 60;
@@ -21,7 +22,7 @@ const minScores = {
 
 type MinTemperature = keyof typeof minScores | "";
 
-export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerProps) {
+export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute }: RoutePlannerProps) {
   const [city, setCity] = useState("");
   const [minTemperature, setMinTemperature] = useState<MinTemperature>("");
   const [onlyPhone, setOnlyPhone] = useState(false);
@@ -80,7 +81,7 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerPro
   }
 
   function mapsUrl() {
-    const route = selectedStops.length ? selectedStops : visibleStops.slice(0, 8);
+    const route = selectedStops.slice(0, 8);
     if (!route.length) return "";
     const [first, ...rest] = route;
     const destination = rest.at(-1) || first;
@@ -96,7 +97,8 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerPro
   }
 
   function copyList() {
-    const route = selectedStops.length ? selectedStops : visibleStops.slice(0, 12);
+    const route = selectedStops;
+    if (!route.length) return;
     void navigator.clipboard?.writeText(
       route.map((stop, index) => `${index + 1}. ${stop.name} · ${stop.city} · ${stop.address || stop.googleMapsUrl || ""}`).join("\n")
     );
@@ -199,6 +201,9 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited }: RoutePlannerPro
             </button>
             <button className="button button--ghost" type="button" onClick={() => onMarkVisited?.(selectedStops)} disabled={!selectedStops.length}>
               Marcar visitados
+            </button>
+            <button className="button button--ghost" type="button" onClick={() => onSaveRoute?.(selectedStops)} disabled={!selectedStops.length}>
+              Guardar ruta
             </button>
           </div>
         </section>

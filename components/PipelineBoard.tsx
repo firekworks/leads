@@ -19,17 +19,11 @@ const lanes: Array<{
   dropStatus: LeadStatus;
   statuses: LeadStatus[];
 }> = [
-  { id: "discard", title: "Descartar", tone: "discard", dropStatus: "No contactar", statuses: ["No contactar", "No encaja"] },
-  { id: "detected", title: "Detectados", tone: "detected", dropStatus: "Detectado", statuses: ["Detectado", "Validado"] },
-  { id: "priority", title: "Priorizados", tone: "priority", dropStatus: "Prioritario", statuses: ["Prioritario"] },
-  { id: "contacted", title: "Contactados", tone: "contacted", dropStatus: "Contactado", statuses: ["Contactado", "Respondió"] },
-  {
-    id: "closing",
-    title: "Cierre",
-    tone: "closing",
-    dropStatus: "Reunión agendada",
-    statuses: ["Reunión agendada", "Diagnóstico hecho", "Propuesta enviada", "Negociación", "Ganado", "Perdido"]
-  }
+  { id: "review", title: "Revisar", tone: "detected", dropStatus: "Detectado", statuses: ["Detectado", "Validado", "No contactar", "No encaja"] },
+  { id: "priority", title: "Prioritario", tone: "priority", dropStatus: "Prioritario", statuses: ["Prioritario"] },
+  { id: "visited", title: "Visitado", tone: "contacted", dropStatus: "Contactado", statuses: ["Contactado", "Respondió", "Reunión agendada", "Diagnóstico hecho"] },
+  { id: "proposal", title: "Propuesta", tone: "closing", dropStatus: "Propuesta enviada", statuses: ["Propuesta enviada"] },
+  { id: "closing", title: "Cierre", tone: "closing", dropStatus: "Negociación", statuses: ["Negociación", "Ganado", "Perdido"] }
 ];
 
 export function PipelineBoard({ leads, selectedId, onSelect, onStatusChange }: PipelineBoardProps) {
@@ -83,7 +77,7 @@ export function PipelineBoard({ leads, selectedId, onSelect, onStatusChange }: P
 
             {lane.id === "closing" ? (
               <div className="pipeline-subchips">
-                {["Reunión agendada", "Propuesta enviada", "Ganado", "Perdido"].map((status) => (
+                {["Negociación", "Ganado", "Perdido"].map((status) => (
                   <span key={status}>{shortStatus(status as LeadStatus)}</span>
                 ))}
               </div>
