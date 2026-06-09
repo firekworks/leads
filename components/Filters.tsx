@@ -90,7 +90,7 @@ export function Filters({
         followersBucket && `IG: ${followersBucket}`,
         contentUse && `Contenido: ${contentUse}`,
         minScore ? `Score +${minScore}` : "",
-        contactEasyOnly && "Contacto fácil",
+        contactEasyOnly && "Con teléfono/WhatsApp",
         withoutInstagram && "Sin Instagram",
         withoutFacebook && "Sin Facebook",
         withoutWeb && "Sin web",
@@ -241,7 +241,7 @@ export function Filters({
                 checked={contactEasyOnly}
                 onChange={(event) => onContactEasyOnly(event.target.checked)}
               />
-              Contacto fácil
+              Con teléfono/WhatsApp
             </label>
             <label>
               <input

@@ -46,17 +46,22 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   try {
-    await auth.admin.from("lead_assets").insert([
-      { lead_id: id, type: "audit", title: "Auditoría resumida", content: demo.summary, preview_data: demo },
-      { lead_id: id, type: "demo_landing", title: "Mockup de landing", content: demo.landing, preview_data: demo },
-      { lead_id: id, type: "whatsapp_message", title: "WhatsApp", content: demo.whatsapp, preview_data: demo },
-      { lead_id: id, type: "instagram_message", title: "Instagram DM", content: demo.instagram, preview_data: demo },
-      { lead_id: id, type: "visit_script", title: "Guion presencial", content: demo.visitScript, preview_data: demo },
-      { lead_id: id, type: "objections", title: "Objeciones", content: demo.objections, preview_data: demo },
-      { lead_id: id, type: "proposal", title: "Propuesta Firekworks", content: demo.proposal, preview_data: demo }
-    ]);
+    await auth.admin.from("lead_notes").insert({
+      lead_id: id,
+      user_id: auth.user.id,
+      pinned: true,
+      note: [
+        `Auditoría: ${demo.summary}`,
+        `Landing: ${demo.landing}`,
+        `WhatsApp: ${demo.whatsapp}`,
+        `Instagram DM: ${demo.instagram}`,
+        `Guion presencial: ${demo.visitScript}`,
+        `Objeciones: ${demo.objections}`,
+        `Propuesta: ${demo.proposal}`
+      ].join("\n\n")
+    });
   } catch {
-    // Optional asset table: generated text is still saved on the lead.
+    // Optional note: generated text is still saved on the lead.
   }
 
   return NextResponse.json({ lead: normalizeLeads([updated as LeadRow])[0], demo });

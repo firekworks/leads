@@ -6,7 +6,7 @@ import { Background } from "@/components/Background";
 import { useInternalAuth } from "@/components/AuthGate";
 import type { Lead } from "@/types/lead";
 
-const cities = ["Castalla", "Ibi", "Onil", "Tibi", "Biar", "Sax", "Elda", "Petrer", "Alcoy"];
+const cities = ["Castalla", "Ibi", "Onil", "Tibi", "Biar", "Sax", "Elda", "Petrer"];
 const sectors = [
   "Restaurantes",
   "Cafeterías",
@@ -55,7 +55,7 @@ export function ScanWorkspace() {
           city,
           sector,
           mode,
-          allowPaidRequests: mode === "import",
+          allowPaidRequests: false,
           maxRequests: 1,
           pageSize: 10,
           returnLeads: false
@@ -105,7 +105,7 @@ export function ScanWorkspace() {
                 Plan sin coste
               </button>
               <button className="button" type="button" onClick={() => runScan("import")} disabled={loading}>
-                Guardar 1 búsqueda
+                Preparar importación
               </button>
             </div>
           </article>

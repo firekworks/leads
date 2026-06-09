@@ -1,10 +1,5 @@
-import { AuthGate } from "@/components/AuthGate";
-import { LeadsWorkspace } from "@/components/LeadsWorkspace";
+import { redirect } from "next/navigation";
 
 export default function MapPage() {
-  return (
-    <AuthGate>
-      <LeadsWorkspace initialView="map" />
-    </AuthGate>
-  );
+  redirect("/radar");
 }

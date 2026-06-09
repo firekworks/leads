@@ -14,6 +14,7 @@ export function SystemWorkspace() {
   const { accessToken, profile } = useInternalAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [message, setMessage] = useState("Cargando");
+  const [actionMessage, setActionMessage] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -40,6 +41,22 @@ export function SystemWorkspace() {
     };
   }, [leads]);
 
+  async function runSystemAction(endpoint: string, label: string) {
+    setActionMessage(`${label}: preparando`);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ allowPaidRequests: false, limit: 25 })
+      });
+      const payload = (await response.json().catch(() => ({}))) as { message?: string; error?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo ejecutar");
+      setActionMessage(payload.message || `${label}: listo`);
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "No se pudo ejecutar");
+    }
+  }
+
   return (
     <main className="app">
       <Background />
@@ -48,18 +65,28 @@ export function SystemWorkspace() {
           <div>
             <p className="eyebrow">Firekworks Leads</p>
             <h1>Sistema</h1>
-            <p className="workspace-subtitle">Integraciones, calidad, scoring, textos y Stats.</p>
+            <p className="workspace-subtitle">Integraciones, enriquecimiento seguro, calidad de datos y reglas comerciales.</p>
           </div>
+          {actionMessage ? <span className="source-pill">{actionMessage}</span> : null}
         </header>
 
         <section className="system-layout">
-          <SystemPanel title="Integraciones" href="/system/providers">
+          <SystemPanel title="Integraciones">
             <SystemRow label="Supabase" value={message} />
-            <SystemRow label="Google Places" value="Limitado" />
-            <SystemRow label="Google Maps" value="Real" />
-            <SystemRow label="Google Calendar" value="Pendiente" />
-            <SystemRow label="Meta / IG" value="Futuro" />
-            <SystemRow label="Search" value="Opcional" />
+            <SystemRow label="Google Maps" value={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "Conectado" : "Pendiente"} />
+            <SystemRow label="Google Places" value="Seguro: preview por defecto" />
+            <SystemRow label="Geocoding" value="Pendiente bajo confirmación" />
+            <SystemRow label="Routes" value="URL Maps gratuita" />
+            <SystemRow label="Meta / Ad Library" value="Preparado, sin prometer scraping" />
+            <SystemRow label="Stats bridge" value="Preparado" />
+          </SystemPanel>
+
+          <SystemPanel title="Enriquecimiento">
+            <SystemAction label="Geocodificar pendientes" onClick={() => runSystemAction("/api/leads/geocode-batch", "Geocodificar")} />
+            <SystemAction label="Enriquecer web/redes" onClick={() => runSystemAction("/api/leads/enrich-batch", "Enriquecer")} />
+            <SystemAction label="Recalcular scoring" onClick={() => runSystemAction("/api/leads/recalculate-batch", "Scoring")} />
+            <SystemRow label="Google Places" value="Nunca hace coste sin allowPaidRequests" />
+            <SystemRow label="Instagram/Facebook" value="Manual o API autorizada" />
           </SystemPanel>
 
           <SystemPanel title="Calidad de datos" href="/system/data-quality">
@@ -72,31 +99,12 @@ export function SystemWorkspace() {
           </SystemPanel>
 
           <SystemPanel title="Scoring" href="/system/scoring">
-            <SystemRow label="Descarte" value="Públicos" />
-            <SystemRow label="Sectores válidos" value="Privados" />
-            <SystemRow label="Zona foco" value="Foia" />
-            <SystemRow label="Temperatura" value="Fit + demanda" />
-          </SystemPanel>
-
-          <SystemPanel title="Textos comerciales" href="/system/texts">
-            <SystemRow label="Snippets" value="Leads" />
-            <SystemRow label="WhatsApp" value="Plantillas" />
-            <SystemRow label="Instagram" value="Plantillas" />
-            <SystemRow label="Usuario" value={profile.role} />
-          </SystemPanel>
-
-          <SystemPanel title="Importación" href="/system/scan">
-            <SystemRow label="Modo seguro" value="Preview" />
-            <SystemRow label="Google Places" value="1 búsqueda" />
-            <SystemRow label="Enriquecimiento" value="Web/redes" />
-            <SystemRow label="Sin coste automático" value="Activo" />
-          </SystemPanel>
-
-          <SystemPanel title="Stats">
-            <SystemRow label="Separación visual" value="Activa" />
-            <SystemRow label="Clientes activos" value="No visible" />
-            <SystemRow label="Conversión lead" value="Preparada" />
-            <SystemRow label="Conector" value="Interno" />
+            <SystemRow label="Demanda local" value="25%" />
+            <SystemRow label="Capacidad pago" value="25%" />
+            <SystemRow label="Brecha digital" value="25%" />
+            <SystemRow label="Encaje Firekworks" value="15%" />
+            <SystemRow label="Visitabilidad" value="10%" />
+            <SystemRow label="Penalizaciones" value="Públicos/cadenas/sin datos" />
           </SystemPanel>
         </section>
       </AppShell>
@@ -122,6 +130,15 @@ function SystemRow({ label, value }: { label: string; value: number | string }) 
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function SystemAction({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button className="system-action" type="button" onClick={onClick}>
+      <span>{label}</span>
+      <strong>Ejecutar</strong>
+    </button>
   );
 }
 

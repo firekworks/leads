@@ -177,19 +177,18 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
 
   if (forcedDiscard) {
     const baseScore = fit.classification === "duplicate" ? 10 : fit.classification === "low_fit" ? 22 : 18;
-    return {
+    return scoreResponse({
       scoreTotal: Math.min(25, baseScore),
-      scoreDemandaVisible: 0,
-      scorePresenciaDigital: 0,
-      scoreUrgencia: 0,
-      scoreDinero: 0,
-      scoreFacilidadContacto: 0,
-      scoreProbabilidadCierre: 0,
-      scorePotencialMensualidad: 0,
-      scorePrioridadVisita: 0,
-      scoreExplanation: [fit.reason || lead.disqualifiedReason || lead.invalidReason || "No cliente probable."],
-      scoreTags: ["No cliente", fitLabels[fit.classification]].filter(Boolean)
-    };
+      demand: 0,
+      paymentCapacity: 0,
+      digitalGap: 0,
+      fit: 0,
+      visitability: 0,
+      penalties: fit.classification === "duplicate" ? -25 : fit.disqualified ? -80 : -60,
+      confidence: 0.95,
+      explanation: [fit.reason || lead.disqualifiedReason || lead.invalidReason || "No cliente probable."],
+      tags: ["No cliente", fitLabels[fit.classification]].filter(Boolean)
+    });
   }
 
   const hasWeb = Boolean(lead.website || lead.signals.web);
@@ -205,58 +204,90 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
   const pendingEnrichment = !hasDemandSource && !hasContactSource && !hasDigitalSource && lead.enrichmentStatus !== "completo";
   const explanation: string[] = [];
   const tags: string[] = [fitLabels[fit.classification]];
+  const focusCities = ["Castalla", "Ibi", "Onil", "Biar", "Tibi", "Sax", "Elda", "Petrer"];
+  const highFitSectors = ["Clínicas", "Fisioterapia", "Veterinarios", "Gimnasios", "Estética", "Inmobiliarias", "Hoteles", "Turismo rural", "Restaurantes", "Academias"];
+  const localCity = focusCities.includes(lead.city);
+  const knownSources = [
+    hasDemandSource,
+    hasContactSource,
+    hasDigitalSource,
+    Boolean(lead.placeId || lead.googleMapsUrl),
+    Boolean(lead.websiteTitle || lead.description),
+    Boolean(lead.ownerName || lead.reviewOwnerCandidates?.length)
+  ].filter(Boolean).length;
 
   const digitalWeakness =
-    (!hasWeb ? 28 : 0) +
-    (!hasInstagram ? 20 : 0) +
-    (!hasFacebook ? 10 : 0) +
-    (!hasWhatsapp ? 10 : 0) +
-    (lead.contentUse === "Sin uso" ? 18 : lead.contentUse === "Flojo" ? 14 : lead.contentUse === "Pendiente" ? 9 : 0) +
-    (lead.googlePhotos < 5 ? 8 : 0);
-  const scorePresenciaDigital = clampScore(digitalWeakness);
+    (!hasWeb ? 26 : 0) +
+    (!hasInstagram ? 22 : 0) +
+    (!hasFacebook ? 8 : 0) +
+    (!hasWhatsapp ? 11 : 0) +
+    (lead.contentUse === "Sin uso" ? 20 : lead.contentUse === "Flojo" ? 16 : lead.contentUse === "Pendiente" ? 10 : 0) +
+    (lead.googlePhotos < 5 ? 10 : 0) +
+    (lead.adsSignal ? 5 : 0);
+  const scoreDigitalGap = clampScore(digitalWeakness);
 
-  const scoreDemandaVisible = clampScore(
-    Math.min(45, reviews / 3.5) +
-      Math.min(30, rating ? rating * 6 : 0) +
-      Math.min(15, lead.googlePhotos / 2) +
-      (lead.googleMapsUrl || lead.signals.googleProfile ? 10 : 0)
+  const scoreDemand = clampScore(
+    Math.min(44, reviews / 3.2) +
+      Math.min(28, rating ? rating * 5.6 : 0) +
+      Math.min(16, lead.googlePhotos / 2.2) +
+      (lead.googleMapsUrl || lead.signals.googleProfile || lead.placeId ? 12 : 0)
   );
-  const demand = Math.min(40, reviews / 7) + Math.min(20, rating * 4);
-  const urgencyGap =
-    scorePresenciaDigital * 0.55 +
-    (reviews >= 100 && rating >= 4.3 ? 24 : reviews >= 35 ? 12 : 0) +
-    (lead.adsSignal ? 10 : 0);
-  const scoreUrgencia = clampScore(urgencyGap);
 
-  const scoreDinero = clampScore((sectorPotential[lead.sector] || 8) * 5 + Math.min(24, lead.potential / 45) + demand * 0.25);
-  const scoreFacilidadContacto = clampScore(
-    (hasPhone ? 32 : 0) + (hasWhatsapp ? 34 : 0) + (hasWeb ? 14 : 0) + (lead.googleMapsUrl ? 12 : 0) + (lead.address ? 8 : 0)
+  const scorePaymentCapacity = clampScore(
+    (sectorPotential[lead.sector] || 8) * 5.2 +
+      Math.min(18, lead.potential / 55) +
+      Math.min(18, reviews / 16) +
+      (rating >= 4.5 ? 8 : rating >= 4.1 ? 4 : 0) +
+      (lead.adsSignal ? 6 : 0)
   );
+
+  const scoreFit = clampScore(
+    (highFitSectors.includes(lead.sector) ? 42 : 28) +
+      (scoreDigitalGap >= 55 ? 20 : scoreDigitalGap >= 35 ? 12 : 6) +
+      (reviews >= 60 ? 14 : reviews >= 20 ? 8 : 2) +
+      (hasInstagram ? 2 : 8) +
+      (localCity ? 10 : 3) +
+      (hasWeb || hasWhatsapp ? 6 : 0)
+  );
+
+  const scoreVisitability = clampScore(
+    (localCity ? 34 : lead.city === "Alcoy" ? 8 : 18) +
+      (lead.address ? 24 : 0) +
+      (hasPhone ? 14 : 0) +
+      (hasWhatsapp ? 14 : 0) +
+      (lead.googleMapsUrl || lead.placeId ? 10 : 0) +
+      (lead.ownerName || lead.reviewOwnerCandidates?.length ? 4 : 0)
+  );
+
+  const scoreFacilidadContacto = scoreVisitability;
+  const scoreUrgencia = clampScore(scoreDigitalGap * 0.55 + scoreDemand * 0.28 + scoreFit * 0.17);
+  const scoreDinero = scorePaymentCapacity;
   const scoreProbabilidadCierre = clampScore(
-    scoreDinero * 0.28 +
+    scorePaymentCapacity * 0.28 +
       scoreUrgencia * 0.28 +
-      scoreFacilidadContacto * 0.22 +
+      scoreVisitability * 0.22 +
       (lead.status === "Respondió" ? 18 : lead.status === "Reunión agendada" ? 26 : lead.status === "Propuesta enviada" ? 30 : 0)
   );
   const scorePotencialMensualidad = clampScore(Math.min(100, estimateRawMonthlyValue(lead) / 10));
-  const scorePrioridadVisita = clampScore(
-    (["Castalla", "Ibi", "Onil", "Biar", "Tibi"].includes(lead.city) ? 30 : 0) +
-      scoreUrgencia * 0.24 +
-      scoreDinero * 0.24 +
-      (lead.address ? 12 : 0) +
-      (rating >= 4.5 ? 10 : 0)
-  );
-  const scoreTotal = clampScore(
-    (pendingEnrichment ? Math.min(scoreDemandaVisible, 20) : scoreDemandaVisible) * 0.25 +
-      scoreDinero * 0.25 +
-      scorePresenciaDigital * 0.2 +
-      scoreFacilidadContacto * 0.15 +
-      scorePrioridadVisita * 0.15
-  );
-  const commercialTemperature = pendingEnrichment ? Math.min(scoreTotal, 39) : scoreTotal;
+  const scorePrioridadVisita = scoreVisitability;
+  const penalty = computeCommercialPenalty(lead, fit, {
+    hasAnyContact: hasPhone || hasWhatsapp || hasWeb || Boolean(lead.googleMapsUrl),
+    localCity,
+    pendingEnrichment
+  });
+  const rawTotal =
+    scoreDemand * 0.25 +
+    scorePaymentCapacity * 0.25 +
+    scoreDigitalGap * 0.25 +
+    scoreFit * 0.15 +
+    scoreVisitability * 0.1 +
+    penalty;
+  const scoreTotal = clampScore(rawTotal);
+  const commercialTemperature = pendingEnrichment ? Math.min(scoreTotal, 44) : scoreTotal;
+  const confidence = Math.max(0.15, Math.min(0.96, knownSources / 6));
 
   if (pendingEnrichment) {
-    explanation.push("Pendiente de enriquecer: faltan fuentes suficientes para valorar temperatura comercial.");
+    explanation.push("Pendiente de enriquecer: faltan fuentes suficientes para valorar temperatura.");
     tags.push("Pendiente de enriquecer");
   }
 
@@ -265,11 +296,11 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
     tags.push("Demanda");
   }
   if (!hasWeb) {
-    explanation.push("Sin web visible: oportunidad de landing y SEO local.");
+    explanation.push("Sin web visible: oportunidad de landing, SEO local y medición.");
     tags.push("Sin web");
   }
   if (!hasInstagram) {
-    explanation.push("Instagram ausente o no detectado: hueco de contenido.");
+    explanation.push("Instagram ausente o no detectado: hueco para contenido audiovisual.");
     tags.push("Sin IG");
   }
   if (lead.contentUse === "Sin uso" || lead.contentUse === "Flojo") {
@@ -277,28 +308,39 @@ export function computeScoreBreakdown(lead: Omit<Lead, "score"> | Lead) {
     tags.push("Hueco visual");
   }
   if (hasWhatsapp || hasPhone) {
-    explanation.push("Contacto fácil para WhatsApp Business y seguimiento.");
+    explanation.push("Contacto directo para WhatsApp Business y seguimiento.");
     tags.push("Contacto");
   }
-  if (["Clínicas", "Fisioterapia", "Inmobiliarias", "Hoteles", "Turismo rural", "Veterinarios"].includes(lead.sector)) {
-    explanation.push("Sector con margen para mensualidad y campañas locales.");
+  if (highFitSectors.includes(lead.sector)) {
+    explanation.push("Sector con encaje para captación local, Meta Ads y contenido recurrente.");
     tags.push("Ticket alto");
   }
-  if (explanation.length === 0) explanation.push("Lead detectado para validación manual de presencia digital y encaje comercial.");
+  if (localCity) {
+    explanation.push("Está en zona de visita prioritaria para Firekworks.");
+    tags.push("Ruta");
+  }
+  if (penalty < 0) {
+    explanation.push("Penalizado por baja visitabilidad, falta de datos o encaje pendiente.");
+    tags.push("Penalizado");
+  }
+  if (explanation.length === 0) explanation.push("Lead detectado para validar demanda, brecha digital y encaje presencial.");
 
-  return {
+  return scoreResponse({
     scoreTotal: commercialTemperature,
-    scoreDemandaVisible,
-    scorePresenciaDigital,
+    demand: scoreDemand,
+    paymentCapacity: scorePaymentCapacity,
+    digitalGap: scoreDigitalGap,
+    fit: scoreFit,
+    visitability: scoreVisitability,
+    penalties: penalty,
+    confidence,
     scoreUrgencia,
-    scoreDinero,
     scoreFacilidadContacto,
     scoreProbabilidadCierre,
     scorePotencialMensualidad,
-    scorePrioridadVisita,
-    scoreExplanation: explanation.slice(0, 5),
-    scoreTags: Array.from(new Set(tags)).slice(0, 5)
-  };
+    explanation: explanation.slice(0, 5),
+    tags: Array.from(new Set(tags)).slice(0, 5)
+  });
 }
 
 export function classifyLeadFit(lead: Omit<Lead, "score"> | Lead): FitResult {
@@ -399,6 +441,85 @@ export function classifyLeadFit(lead: Omit<Lead, "score"> | Lead): FitResult {
   };
 }
 
+function scoreResponse({
+  scoreTotal,
+  demand,
+  paymentCapacity,
+  digitalGap,
+  fit,
+  visitability,
+  penalties,
+  confidence,
+  scoreUrgencia,
+  scoreFacilidadContacto,
+  scoreProbabilidadCierre,
+  scorePotencialMensualidad,
+  explanation,
+  tags
+}: {
+  scoreTotal: number;
+  demand: number;
+  paymentCapacity: number;
+  digitalGap: number;
+  fit: number;
+  visitability: number;
+  penalties: number;
+  confidence: number;
+  scoreUrgencia?: number;
+  scoreFacilidadContacto?: number;
+  scoreProbabilidadCierre?: number;
+  scorePotencialMensualidad?: number;
+  explanation: string[];
+  tags: string[];
+}) {
+  const updatedAt = new Date().toISOString();
+  const urgency = scoreUrgencia ?? clampScore(digitalGap * 0.55 + demand * 0.25 + fit * 0.2);
+  const contactability = scoreFacilidadContacto ?? visitability;
+  const closeProbability = scoreProbabilidadCierre ?? clampScore(paymentCapacity * 0.3 + urgency * 0.3 + visitability * 0.2);
+  const monthlyPotential = scorePotencialMensualidad ?? paymentCapacity;
+
+  return {
+    scoreTotal: clampScore(scoreTotal),
+    scoreDemand: clampScore(demand),
+    scorePaymentCapacity: clampScore(paymentCapacity),
+    scoreDigitalGap: clampScore(digitalGap),
+    scoreFit: clampScore(fit),
+    scoreVisitability: clampScore(visitability),
+    scorePenalties: penalties,
+    scoreConfidence: Number(confidence.toFixed(2)),
+    scoreUpdatedAt: updatedAt,
+    scoreDemandaVisible: clampScore(demand),
+    scorePresenciaDigital: clampScore(digitalGap),
+    scoreUrgencia: urgency,
+    scoreDinero: clampScore(paymentCapacity),
+    scoreFacilidadContacto: contactability,
+    scoreProbabilidadCierre: closeProbability,
+    scorePotencialMensualidad: monthlyPotential,
+    scorePrioridadVisita: clampScore(visitability),
+    scoreExplanation: explanation,
+    scoreTags: Array.from(new Set(tags)).filter(Boolean)
+  };
+}
+
+function computeCommercialPenalty(
+  lead: Omit<Lead, "score"> | Lead,
+  fit: FitResult,
+  flags: { hasAnyContact: boolean; localCity: boolean; pendingEnrichment: boolean }
+) {
+  let penalty = 0;
+  const text = normalizeForFit([lead.name, lead.sector, lead.websiteTitle, lead.description].join(" "));
+  const nationalChainTerms = ["mcdonald", "burger king", "mercadona", "carrefour", "lidl", "aldi", "dia ", "consum", "repsol", "cepsa", "bp "];
+
+  if (fit.classification === "unknown") penalty -= 8;
+  if (!flags.localCity) penalty -= 10;
+  if (!lead.address) penalty -= 6;
+  if (!flags.hasAnyContact) penalty -= 12;
+  if (flags.pendingEnrichment) penalty -= 10;
+  if (matchesAny(text, nationalChainTerms)) penalty -= 25;
+
+  return Math.max(-60, penalty);
+}
+
 function disqualifiedFit(classification: FitClassification, reason: string): FitResult {
   return {
     classification,
@@ -474,15 +595,15 @@ function computeLegacyScore(lead: Omit<Lead, "score"> | Lead) {
 
 export function scoreLabel(score: number) {
   if (score >= 80) return "Muy caliente";
-  if (score >= 60) return "Caliente";
-  if (score >= 40) return "Templado";
+  if (score >= 65) return "Caliente";
+  if (score >= 45) return "Revisar";
   return "Frío";
 }
 
 export function scoreTone(score: number) {
   if (score >= 80) return "priority";
-  if (score >= 60) return "hot";
-  if (score >= 40) return "warm";
+  if (score >= 65) return "hot";
+  if (score >= 45) return "warm";
   if (score >= 20) return "cold";
   return "reject";
 }
@@ -498,7 +619,7 @@ export function estimateMonthlyValue(lead: Lead) {
 function estimateRawMonthlyValue(lead: Omit<Lead, "score"> | Lead) {
   const base = monthlyBaseBySector[lead.sector] || 340;
   const score = "score" in lead ? lead.score : computeLegacyScore(lead);
-  const scoreMultiplier = score >= 80 ? 1.25 : score >= 60 ? 0.85 : score >= 40 ? 0.45 : 0.18;
+  const scoreMultiplier = score >= 80 ? 1.18 : score >= 65 ? 0.78 : score >= 45 ? 0.38 : 0.12;
   const visualOpportunity =
     lead.contentUse === "Sin uso"
       ? 1.14
@@ -519,7 +640,7 @@ export function estimateWeightedMonthlyValue(lead: Lead) {
   if (!monthlyValue) return 0;
 
   const scoreProbability =
-    lead.score >= 80 ? 0.18 : lead.score >= 60 ? 0.08 : lead.score >= 40 ? 0.035 : 0.012;
+    lead.score >= 80 ? 0.16 : lead.score >= 65 ? 0.075 : lead.score >= 45 ? 0.03 : 0.01;
   const stageMultiplier: Record<string, number> = {
     Detectado: 0.65,
     Validado: 0.9,
@@ -550,11 +671,11 @@ export function recommendServicePlan(lead: Lead) {
       visits: "2 visitas/mes",
       content: "8-10 piezas",
       ads: adBudget,
-      focus: "Meta Ads, reels, Google Business, WhatsApp y reseñas"
+      focus: "Meta Ads, reels, carrusels, Google Business, WhatsApp y reseñas"
     };
   }
 
-  if (monthlyValue >= 450 || lead.score >= 60) {
+  if (monthlyValue >= 450 || lead.score >= 65) {
     return {
       name: "Crecimiento",
       visits: "1 visita/mes",
@@ -576,8 +697,8 @@ export function recommendServicePlan(lead: Lead) {
 export function estimateAdBudget(lead: Lead) {
   const premiumSector = ["Clínicas", "Inmobiliarias", "Hoteles"].includes(lead.sector);
   if (lead.score >= 80) return premiumSector ? 500 : 350;
-  if (lead.score >= 60) return 220;
-  if (lead.score >= 40) return 120;
+  if (lead.score >= 65) return 220;
+  if (lead.score >= 45) return 120;
   return 80;
 }
 
@@ -605,7 +726,7 @@ export function explainPotential(lead: Lead) {
   }
 
   if (lead.phone || lead.whatsappUrl || lead.googleMapsUrl) {
-    reasons.push("Contacto fácil");
+    reasons.push("Contacto directo");
   }
 
   if (["Castalla", "Ibi", "Onil", "Biar", "Tibi"].includes(lead.city)) {

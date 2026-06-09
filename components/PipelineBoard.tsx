@@ -11,7 +11,7 @@ type PipelineBoardProps = {
   onStatusChange: (lead: Lead, status: LeadStatus) => void | Promise<void>;
 };
 
-const COLUMN_PAGE_SIZE = 28;
+const COLUMN_PAGE_SIZE = 20;
 const lanes: Array<{
   id: string;
   title: string;

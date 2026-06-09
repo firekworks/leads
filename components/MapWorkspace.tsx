@@ -10,7 +10,7 @@ type MapWorkspaceProps = {
   onSelect: (lead: Lead) => void;
 };
 
-const focusCities = ["Castalla", "Ibi", "Onil", "Tibi", "Biar", "Sax", "Elda", "Petrer", "Alcoy"];
+const focusCities = ["Castalla", "Ibi", "Onil", "Tibi", "Biar", "Sax", "Elda", "Petrer"];
 
 type GoogleMapsNamespace = {
   maps: {
@@ -107,18 +107,25 @@ export function MapWorkspace({ leads, selectedId, onSelect }: MapWorkspaceProps)
         ) : (
           <div className="map-fallback">
             <span className="css-icon css-icon--map" aria-hidden="true" />
-            <strong>Mapa interactivo pendiente de conectar</strong>
+            <strong>Mapa pendiente de conectar</strong>
             <p>
               {mapsKey
-                ? "La clave existe, pero faltan coordenadas reales en los comercios. No se inventan ubicaciones."
-                : "Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY y guarda lat/lng para mostrar un mapa real."}
+                ? "La clave existe, pero faltan coordenadas reales en algunos comercios. No se inventan ubicaciones."
+                : "Añade NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para mostrar el mapa real. Mientras tanto, usa la lista priorizada."}
             </p>
+            <button className="button button--ghost" type="button" onClick={copyMapVars}>
+              Copiar variables necesarias
+            </button>
           </div>
         )}
         {mapError ? <p className="map-error">{mapError}</p> : null}
       </div>
 
       <aside className="map-side">
+        <header className="map-side__header">
+          <span>Top oportunidades</span>
+          <strong>{localLeads.length}</strong>
+        </header>
         <div className="map-city-list">
           {cityGroups.map((city) => (
             <article key={city.name}>
@@ -177,10 +184,14 @@ function leadPosition(lead: Lead) {
 
 function markerColor(score: number) {
   if (score >= 80) return "#28e0c2";
-  if (score >= 60) return "#5bd097";
-  if (score >= 40) return "#f3b84b";
-  if (score >= 20) return "#58a6ff";
+  if (score >= 65) return "#a7f36b";
+  if (score >= 45) return "#f3b84b";
+  if (score >= 20) return "#7890a6";
   return "#e76f6f";
+}
+
+function copyMapVars() {
+  void navigator.clipboard?.writeText("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=\nGOOGLE_MAPS_SERVER_API_KEY=\nGOOGLE_PLACES_API_KEY=\nGOOGLE_ROUTES_API_KEY=");
 }
 
 function groupByCity(leads: Lead[]) {

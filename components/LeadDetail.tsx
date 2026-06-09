@@ -11,6 +11,7 @@ type LeadDetailProps = {
   lead: Lead;
   statuses: LeadStatus[];
   variant?: "inline" | "panel";
+  accessToken?: string;
   onSave: (lead: Lead) => void | Promise<void>;
   onEnrich: (lead: Lead) => void;
   onFindOwner: (lead: Lead) => void;
@@ -26,13 +27,14 @@ type LeadDetailProps = {
 
 const followersBuckets: FollowersBucket[] = ["Pendiente", "Sin cuenta", "< 1.000", "1.000 - 5.000", "+5.000"];
 const contentUses: ContentUse[] = ["Pendiente", "Sin uso", "Flojo", "Activo", "Muy trabajado"];
-const tabs = ["Resumen", "Auditoría", "Fuentes", "Propuesta", "Seguimiento", "Acciones"] as const;
+const tabs = ["Resumen", "Diagnóstico", "Propuesta", "Visita", "Historial"] as const;
 type DetailTab = (typeof tabs)[number];
 
 export function LeadDetail({
   lead,
   statuses,
   variant = "panel",
+  accessToken,
   onSave,
   onEnrich,
   onFindOwner,
@@ -47,24 +49,29 @@ export function LeadDetail({
 }: LeadDetailProps) {
   const [draft, setDraft] = useState(lead);
   const [activeTab, setActiveTab] = useState<DetailTab>("Resumen");
-  const [activityType, setActivityType] = useState("WhatsApp");
+  const [activityType, setActivityType] = useState("visita");
   const [activityResult, setActivityResult] = useState("");
   const [activityNext, setActivityNext] = useState("");
   const [activityReminder, setActivityReminder] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [proposalStatus, setProposalStatus] = useState("");
+  const [visitStatus, setVisitStatus] = useState("");
   const dirtyRef = useRef(false);
   const searchUrls = useMemo(() => googleSearchUrls(draft), [draft]);
   const plan = recommendServicePlan(draft);
   const monthlyValue = estimateMonthlyValue(draft);
-  const scoreReasons = [...(draft.scoreExplanation || []), ...(draft.scoreTags || [])].slice(0, 6);
-  const demo = buildDemo(draft);
-  const messages = buildMessages(draft);
+  const adBudget = estimateAdBudget(draft);
+  const pitch = buildPitch(draft);
+  const visitScript = buildVisitScript(draft);
+  const hasProposalData = Boolean(draft.problemDetected || draft.opportunityDetected || draft.recommendedService || draft.recommendedOffer);
 
   useEffect(() => {
     dirtyRef.current = false;
     setDraft(lead);
     setActiveTab("Resumen");
     setSaveStatus("idle");
+    setProposalStatus("");
+    setVisitStatus("");
   }, [lead]);
 
   useEffect(() => {
@@ -87,36 +94,10 @@ export function LeadDetail({
       await onSave({ ...draft, updatedAt: new Date().toISOString() });
       dirtyRef.current = false;
       setSaveStatus("saved");
-      if (!options?.silent) setActiveTab(activeTab);
     } catch {
       setSaveStatus("error");
+      if (!options?.silent) setSaveStatus("error");
     }
-  }
-
-  async function generateDemo() {
-    const nextLead = {
-      ...draft,
-      problemDetected: demo.problem,
-      opportunityDetected: demo.opportunity,
-      recommendedService: demo.proposal,
-      recommendedOffer: plan.name,
-      salesHook: demo.hook,
-      inPersonArgument: messages.visit,
-      suggestedWhatsappMessage: messages.whatsapp,
-      suggestedInstagramMessage: messages.instagram,
-      probableObjection: messages.objections,
-      nextAction: draft.nextAction || "Enviar diagnóstico breve y proponer visita de 15 minutos",
-      updatedAt: new Date().toISOString()
-    };
-    setDraft(nextLead);
-    dirtyRef.current = false;
-    await onSave(nextLead);
-    setSaveStatus("saved");
-  }
-
-  function copyText(text: string) {
-    if (!text) return;
-    void navigator.clipboard?.writeText(text);
   }
 
   async function setStatus(status: LeadStatus) {
@@ -134,16 +115,66 @@ export function LeadDetail({
     await onSave(nextLead);
   }
 
-  function restore() {
-    void onSave({
-      ...draft,
-      status: draft.status === "No contactar" ? "Detectado" : draft.status,
-      isInvalid: false,
-      isDisqualified: false,
-      validationStatus: "revisar",
-      manualOverride: true,
-      updatedAt: new Date().toISOString()
-    });
+  async function moveToNextStage() {
+    const next: Partial<Record<LeadStatus, LeadStatus>> = {
+      Detectado: "Validado",
+      Validado: "Prioritario",
+      Prioritario: "Contactado",
+      Contactado: "Respondió",
+      Respondió: "Reunión agendada",
+      "Reunión agendada": "Diagnóstico hecho",
+      "Diagnóstico hecho": "Propuesta enviada",
+      "Propuesta enviada": "Negociación",
+      Negociación: "Ganado"
+    };
+    await setStatus(next[draft.status] || draft.status);
+  }
+
+  async function generateProposal() {
+    setProposalStatus("Generando");
+    try {
+      const response = await fetch(`/api/leads/${draft.id}/generate-proposal`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}) },
+        body: JSON.stringify({})
+      });
+      const payload = (await response.json()) as { lead?: Lead; error?: string };
+      if (!response.ok || !payload.lead) throw new Error(payload.error || "No se pudo generar");
+      setDraft(payload.lead);
+      await onSave(payload.lead);
+      setProposalStatus("Propuesta guardada");
+    } catch (error) {
+      const localLead = applyLocalProposal(draft);
+      setDraft(localLead);
+      await onSave(localLead);
+      setProposalStatus(error instanceof Error ? `Local: ${error.message}` : "Generada en local");
+    }
+  }
+
+  async function generateVisitScript() {
+    setVisitStatus("Preparando");
+    try {
+      const response = await fetch(`/api/leads/${draft.id}/generate-visit-script`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}) },
+        body: JSON.stringify({})
+      });
+      const payload = (await response.json()) as { lead?: Lead; error?: string };
+      if (!response.ok || !payload.lead) throw new Error(payload.error || "No se pudo preparar");
+      setDraft(payload.lead);
+      await onSave(payload.lead);
+      setVisitStatus("Guion guardado");
+    } catch {
+      const nextLead = { ...draft, inPersonArgument: visitScript.argument, updatedAt: new Date().toISOString() };
+      setDraft(nextLead);
+      await onSave(nextLead);
+      setVisitStatus("Guion local guardado");
+    }
+  }
+
+  function copyText(text: string) {
+    if (!text) return;
+    void navigator.clipboard?.writeText(text);
   }
 
   return (
@@ -154,20 +185,30 @@ export function LeadDetail({
 
       <div className="lead-detail__top">
         <div className="lead-title-block">
-          <span className="eyebrow">Ficha lead</span>
+          <span className="eyebrow">Ficha comercial</span>
           <h2>{draft.name}</h2>
           <p>{draft.city} · {draft.sector}</p>
-          <span className={`status-pill status-pill--${statusTone(draft.status)}`}>{draft.status}</span>
+          <div className="stage-row">
+            <span className={`status-pill status-pill--${statusTone(draft.status)}`}>{draft.status}</span>
+            <button type="button" onClick={moveToNextStage}>Avanzar</button>
+          </div>
         </div>
         <ScoreRing score={draft.score} label={scoreLabel(draft.score)} />
       </div>
 
-      <div className="detail-summary">
-        <MiniStat label="Temperatura" value={scoreLabel(draft.score)} />
-        <MiniStat label="Mensualidad" value={monthlyValue ? `≈ ${monthlyValue}€` : "Revisar"} />
-        <MiniStat label="Ads orientativo" value={`≈ ${estimateAdBudget(draft)}€`} />
-        <MiniStat label="Plan" value={plan.name} />
-        <MiniStat label="Próximo paso" value={draft.nextAction || "Pendiente"} />
+      <div className="detail-actions detail-actions--primary">
+        <button className="button button--primary" type="button" onClick={() => onEnrich(draft)} disabled={enriching}>
+          {enriching ? "Enriqueciendo" : "Enriquecer"}
+        </button>
+        <button className="button button--ghost" type="button" onClick={() => update("nextFollowUpType", "ruta")}>
+          Añadir ruta
+        </button>
+        <a className="button button--ghost" href={draft.googleMapsUrl || searchUrls.googleMaps} target="_blank" rel="noreferrer">
+          Maps
+        </a>
+        <button className="button button--ghost" type="button" onClick={() => saveDraft()}>
+          {saveStatusLabel(saveStatus)}
+        </button>
       </div>
 
       <nav className="detail-tabs" aria-label="Secciones de la ficha">
@@ -186,131 +227,131 @@ export function LeadDetail({
       <div className="detail-form">
         {activeTab === "Resumen" ? (
           <section className="detail-section detail-section--wide">
-            <h3>Decisión rápida</h3>
-            <div className="decision-grid">
-              <Decision label="Demanda" value={draft.reviews ? `${draft.rating || "-"}★ · ${draft.reviews} reseñas` : "No verificado"} />
-              <Decision label="Oferta" value={plan.name} />
-              <Decision label="Brecha" value={!draft.website ? "Landing/SEO" : !draft.instagramUrl ? "Contenido" : "Optimizar"} />
-              <Decision label="Contacto" value={draft.phone || draft.whatsappUrl ? "Fácil" : "Buscar"} />
-              <Decision label="Ruta" value={draft.address ? "Visitable" : "Pendiente"} />
+            <div className="detail-summary detail-summary--decision">
+              <MiniStat label="Temperatura" value={scoreLabel(draft.score)} />
+              <MiniStat label="Mensualidad" value={monthlyValue ? `≈ ${monthlyValue}€` : "Validar"} />
+              <MiniStat label="Ads" value={`≈ ${adBudget}€`} />
+              <MiniStat label="Siguiente" value={draft.nextAction || "Definir visita"} />
             </div>
+
+            <div className="score-factor-grid">
+              <ScoreFactor label="Demanda" score={draft.scoreDemand ?? draft.scoreDemandaVisible ?? 0} text={demandText(draft)} />
+              <ScoreFactor label="Brecha digital" score={draft.scoreDigitalGap ?? draft.scorePresenciaDigital ?? 0} text={gapText(draft)} />
+              <ScoreFactor label="Pago" score={draft.scorePaymentCapacity ?? draft.scoreDinero ?? 0} text={paymentText(draft)} />
+              <ScoreFactor label="Encaje" score={draft.scoreFit ?? 0} text={fitText(draft)} />
+            </div>
+
             <div className="score-reasons">
-              {scoreReasons.length ? scoreReasons.map((reason) => <span key={reason}>{reason}</span>) : <span>Pendiente de enriquecer.</span>}
+              {(draft.scoreExplanation?.length ? draft.scoreExplanation : [pitch.reason]).slice(0, 4).map((reason) => (
+                <span key={reason}>{reason}</span>
+              ))}
             </div>
+
             <TextArea label="Próximo paso" value={draft.nextAction} onChange={(value) => update("nextAction", value)} />
+
+            <details className="edit-accordion">
+              <summary>Editar datos</summary>
+              <div className="edit-grid">
+                <Field label="Nombre" value={draft.name} onChange={(value) => update("name", value)} />
+                <Field label="Sector" value={draft.sector} onChange={(value) => update("sector", value)} />
+                <Field label="Ciudad" value={draft.city} onChange={(value) => update("city", value)} />
+                <Field label="Dirección" value={draft.address} onChange={(value) => update("address", value)} />
+                <Field label="Teléfono" value={draft.phone} onChange={(value) => update("phone", value)} />
+                <Field label="Web" value={draft.website} onChange={(value) => update("website", value)} />
+                <Field label="Instagram" value={draft.instagramUrl} onChange={(value) => update("instagramUrl", value)} />
+                <Field label="Facebook" value={draft.facebookUrl} onChange={(value) => update("facebookUrl", value)} />
+                <Field label="WhatsApp" value={draft.whatsappUrl} onChange={(value) => update("whatsappUrl", value)} />
+                <Field label="Dueño/contacto" value={draft.ownerName} onChange={(value) => update("ownerName", value)} />
+                <SelectField label="Estado" value={draft.status} options={statuses} onChange={(value) => setStatus(value as LeadStatus)} />
+                <SelectField label="Seguidores IG" value={draft.followersBucket} options={followersBuckets} onChange={(value) => update("followersBucket", value as FollowersBucket)} />
+                <SelectField label="Contenido" value={draft.contentUse} options={contentUses} onChange={(value) => update("contentUse", value as ContentUse)} />
+                <DateField label="Seguimiento" value={draft.nextFollowUpAt?.slice(0, 16) || ""} onChange={(value) => update("nextFollowUpAt", value)} />
+              </div>
+            </details>
           </section>
         ) : null}
 
-        {activeTab === "Auditoría" ? (
+        {activeTab === "Diagnóstico" ? (
           <section className="detail-section detail-section--wide">
-            <h3>Auditoría comercial</h3>
-            <div className="audit-lines">
-              <AuditLine label="Google Maps" value={draft.googleMapsUrl ? "Detectado" : "Pendiente"} source="Google Places" confidence={draft.googleMapsUrl ? "Alta" : "Baja"} />
-              <AuditLine label="Rating" value={draft.rating ? `${draft.rating} / 5` : "No verificado"} source="Places" confidence={draft.rating ? "Media" : "Baja"} />
-              <AuditLine label="Reseñas" value={draft.reviews ? String(draft.reviews) : "No verificado"} source="Places" confidence={draft.reviews ? "Media" : "Baja"} />
-              <AuditLine label="Web" value={draft.website ? "Detectada" : "No detectada"} source={draft.website ? "Lead" : "Pendiente"} confidence={draft.website ? "Media" : "Baja"} />
-              <AuditLine label="Instagram" value={draft.instagramUrl ? "Detectado" : "Pendiente"} source={draft.instagramStatus || "manual"} confidence={draft.instagramUrl ? "Media" : "Baja"} />
-              <AuditLine label="Facebook" value={draft.facebookUrl ? "Detectado" : "Pendiente"} source="web/manual" confidence={draft.facebookUrl ? "Media" : "Baja"} />
-              <AuditLine label="Teléfono" value={draft.phone ? "Detectado" : "Pendiente"} source="Places/manual" confidence={draft.phone ? "Alta" : "Baja"} />
-              <AuditLine label="WhatsApp" value={draft.whatsappUrl ? "Detectado" : "Pendiente"} source="web/manual" confidence={draft.whatsappUrl ? "Media" : "Baja"} />
-              <AuditLine label="Fotos" value={draft.googlePhotos ? `${draft.googlePhotos} fotos` : "No verificado"} source="Places" confidence={draft.googlePhotos ? "Media" : "Baja"} />
-              <AuditLine label="Facturación" value="No verificada" source="Provider pendiente" confidence="Baja" />
+            <div className="diagnostic-stack">
+              <DiagnosticCard title="Presencia local" value={demandText(draft)} source={draft.placeId ? "Google Places" : "Pendiente"} />
+              <DiagnosticCard title="Presencia digital" value={gapText(draft)} source={draft.website || draft.instagramUrl ? "Web/redes" : "Manual"} />
+              <DiagnosticCard title="Capacidad de pago" value={paymentText(draft)} source="Inferido" />
+              <DiagnosticCard title="Dolor probable" value={draft.problemDetected || pitch.problem} source={hasProposalData ? "Verificado/interno" : "Inferido"} />
             </div>
-          </section>
-        ) : null}
-
-        {activeTab === "Fuentes" ? (
-          <section className="detail-section detail-section--wide">
-            <h3>Fuentes y edición</h3>
-            <div className="source-list">
-              <SourceLine label="Google Places" value={draft.placeId || "Pendiente"} />
-              <SourceLine label="Web" value={draft.website || "Pendiente de enriquecer"} />
-              <SourceLine label="Instagram" value={draft.instagramUrl || "Pendiente"} />
-              <SourceLine label="Facebook" value={draft.facebookUrl || "Pendiente"} />
-              <SourceLine label="Última revisión" value={draft.lastEnrichedAt || draft.lastRefreshedAt || "Pendiente"} />
-              <SourceLine label="Confianza" value={draft.scoreTags?.includes("No cliente") ? "Baja" : draft.enrichmentStatus || "Pendiente"} />
+            <details className="source-accordion">
+              <summary>Ver fuentes</summary>
+              <div className="source-list source-list--compact">
+                <SourceLine label="Google Places" value={draft.placeId || "Pendiente"} />
+                <SourceLine label="Web" value={draft.website || "Sin web"} />
+                <SourceLine label="Instagram" value={draft.instagramUrl || "Pendiente manual"} />
+                <SourceLine label="Facebook" value={draft.facebookUrl || "Pendiente manual"} />
+                <SourceLine label="Meta Ads" value={draft.adsSignal || "No verificado"} />
+                <SourceLine label="Última revisión" value={draft.lastEnrichedAt || draft.lastRefreshedAt || "Pendiente"} />
+              </div>
+            </details>
+            <div className="quick-actions">
+              <a href={searchUrls.instagram} target="_blank" rel="noreferrer">Buscar Instagram</a>
+              <a href={searchUrls.facebook} target="_blank" rel="noreferrer">Buscar Facebook</a>
+              <a href={searchUrls.owner} target="_blank" rel="noreferrer">Buscar dueño</a>
+              <button type="button" onClick={() => onFindOwner(draft)} disabled={findingOwner || !draft.placeId}>
+                {findingOwner ? "Buscando" : "Reseñas"}
+              </button>
             </div>
-            <Field label="Nombre" value={draft.name} onChange={(value) => update("name", value)} />
-            <Field label="Ciudad" value={draft.city} onChange={(value) => update("city", value)} />
-            <Field label="Sector" value={draft.sector} onChange={(value) => update("sector", value)} />
-            <Field label="Teléfono" value={draft.phone} onChange={(value) => update("phone", value)} />
-            <Field label="Web" value={draft.website} onChange={(value) => update("website", value)} />
-            <Field label="Instagram" value={draft.instagramUrl} onChange={(value) => update("instagramUrl", value)} />
-            <Field label="Facebook" value={draft.facebookUrl} onChange={(value) => update("facebookUrl", value)} />
-            <Field label="Dirección" value={draft.address} onChange={(value) => update("address", value)} />
           </section>
         ) : null}
 
         {activeTab === "Propuesta" ? (
           <section className="detail-section detail-section--wide">
-            <h3>Propuesta presencial</h3>
+            {!hasProposalData ? (
+              <div className="proposal-state">
+                <strong>Faltan datos para afinar</strong>
+                <span>Puede generarse una propuesta base, pero será mejor tras enriquecer web, redes y Google.</span>
+                <div className="detail-empty-actions">
+                  <button className="button button--ghost" type="button" onClick={() => onEnrich(draft)}>Enriquecer Google/web</button>
+                  <a className="button button--ghost" href={searchUrls.instagram} target="_blank" rel="noreferrer">Añadir Instagram</a>
+                </div>
+              </div>
+            ) : null}
+
             <div className="demo-grid">
-              <DemoBlock title="Problema" text={draft.problemDetected || demo.problem} />
-              <DemoBlock title="Oportunidad" text={draft.opportunityDetected || demo.opportunity} />
-              <DemoBlock title="Propuesta Firekworks" text={draft.recommendedService || demo.proposal} />
-              <DemoBlock title="Pack" text={plan.name} />
-              <DemoBlock title="Ads" text={demo.ads} />
-              <DemoBlock title="Siguiente paso" text={demo.cta} />
+              <DemoBlock title="Dolor" text={draft.problemDetected || pitch.problem} />
+              <DemoBlock title="Oportunidad" text={draft.opportunityDetected || pitch.opportunity} />
+              <DemoBlock title="Pack" text={draft.recommendedOffer || plan.name} />
+              <DemoBlock title="Precio" text={monthlyValue ? `Desde ${monthlyValue}€/mes + ads ${adBudget}€ aprox.` : "Validar en visita"} />
+              <DemoBlock title="Demo" text={draft.salesHook || pitch.hook} />
+              <DemoBlock title="Siguiente paso" text={draft.nextAction || pitch.nextStep} />
             </div>
-            <button className="button button--primary" type="button" onClick={generateDemo}>Generar propuesta</button>
+
+            <MessageBlock title="Pitch 30s" text={draft.inPersonArgument || pitch.thirtySeconds} onCopy={copyText} />
+            <MessageBlock title="Objeción probable" text={draft.probableObjection || pitch.objection} onCopy={copyText} />
+            <button className="button button--primary" type="button" onClick={generateProposal}>
+              Generar propuesta
+            </button>
+            {proposalStatus ? <span className="inline-status">{proposalStatus}</span> : null}
           </section>
         ) : null}
 
-        {activeTab === "Seguimiento" ? (
+        {activeTab === "Visita" ? (
           <section className="detail-section detail-section--wide">
-            <h3>Seguimiento</h3>
-            <MessageBlock title="WhatsApp" text={draft.suggestedWhatsappMessage || messages.whatsapp} onCopy={copyText} />
-            <MessageBlock title="Instagram DM" text={draft.suggestedInstagramMessage || messages.instagram} onCopy={copyText} />
-            <MessageBlock title="Visita presencial" text={draft.inPersonArgument || messages.visit} onCopy={copyText} />
-            <MessageBlock title="Objeciones" text={draft.probableObjection || messages.objections} onCopy={copyText} />
+            <div className="copy-grid">
+              <MessageBlock title="Apertura" text={visitScript.opening} onCopy={copyText} />
+              <MessageBlock title="Preguntas" text={visitScript.questions} onCopy={copyText} />
+              <MessageBlock title="Cierre suave" text={visitScript.close} onCopy={copyText} />
+              <MessageBlock title="Objeciones" text={visitScript.objections} onCopy={copyText} />
+            </div>
+            <button className="button button--primary" type="button" onClick={generateVisitScript}>
+              Preparar guion
+            </button>
+            {visitStatus ? <span className="inline-status">{visitStatus}</span> : null}
           </section>
         ) : null}
 
-        {activeTab === "Acciones" ? (
+        {activeTab === "Historial" ? (
           <section className="detail-section detail-section--wide">
-            <h3>Acciones</h3>
-            <div className="detail-actions">
-              <button className="button" type="button" onClick={() => saveDraft()}>{saveStatusLabel(saveStatus)}</button>
-              <button className="button button--ghost" type="button" onClick={() => onEnrich(draft)} disabled={enriching}>{enriching ? "Enriqueciendo" : "Enriquecer"}</button>
-              <button className="button button--ghost" type="button" onClick={() => onFindOwner(draft)} disabled={findingOwner || !draft.placeId}>{findingOwner ? "Buscando" : "Buscar dueño"}</button>
-              <button className="button button--ghost" type="button" onClick={() => update("nextFollowUpType", "ruta")}>Añadir a ruta</button>
-              <button className="button button--ghost" type="button" onClick={() => setStatus("Prioritario")}>Priorizar</button>
-              <button className="button button--ghost" type="button" onClick={() => setStatus("Contactado")}>Contactado</button>
-              <button className="button button--ghost" type="button" onClick={() => setStatus("No contactar")}>Descartar</button>
-              <button className="button button--ghost" type="button" onClick={() => onConvert(draft)} disabled={draft.status === "Ganado"}>Convertir</button>
-            </div>
-            <div className="quick-actions">
-              <a href={draft.googleMapsUrl || searchUrls.googleMaps} target="_blank" rel="noreferrer">Maps</a>
-              <a href={searchUrls.instagram} target="_blank" rel="noreferrer">Buscar IG</a>
-              <a href={searchUrls.facebook} target="_blank" rel="noreferrer">Buscar FB</a>
-              <a href={searchUrls.owner} target="_blank" rel="noreferrer">Dueño</a>
-              {(draft.isInvalid || draft.isDisqualified || draft.status === "No contactar") ? <button type="button" onClick={restore}>Restaurar</button> : null}
-            </div>
-
-            <label>
-              Estado
-              <select value={draft.status} onChange={(event) => setStatus(event.target.value as LeadStatus)}>
-                {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
-              </select>
-            </label>
-            <label>
-              Seguidores IG
-              <select value={draft.followersBucket} onChange={(event) => update("followersBucket", event.target.value as FollowersBucket)}>
-                {followersBuckets.map((bucket) => <option key={bucket} value={bucket}>{bucket}</option>)}
-              </select>
-            </label>
-            <label>
-              Uso contenido
-              <select value={draft.contentUse} onChange={(event) => update("contentUse", event.target.value as ContentUse)}>
-                {contentUses.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </label>
-            <DateField label="Seguimiento" value={draft.nextFollowUpAt?.slice(0, 16) || ""} onChange={(value) => update("nextFollowUpAt", value)} />
-            <TextArea label="Nota interna" value={draft.inPersonArgument || ""} onChange={(value) => update("inPersonArgument", value)} />
-
             <div className="activity-box detail-form__wide">
               <select value={activityType} onChange={(event) => setActivityType(event.target.value)}>
-                {["WhatsApp", "llamada", "email", "Instagram", "visita", "reunión", "propuesta", "nota"].map((item) => (
+                {["visita", "WhatsApp", "llamada", "Instagram", "reunión", "propuesta", "nota"].map((item) => (
                   <option key={item} value={item}>{item}</option>
                 ))}
               </select>
@@ -327,11 +368,15 @@ export function LeadDetail({
                   setActivityReminder("");
                 }}
               >
-                Registrar actividad
+                Registrar
               </button>
             </div>
-
             <Timeline activities={activities} tasks={tasks} notes={notes} />
+            <div className="detail-actions">
+              <button className="button button--ghost" type="button" onClick={() => setStatus("No contactar")}>No contactar</button>
+              <button className="button button--ghost" type="button" onClick={() => setStatus("Perdido")}>Perdido</button>
+              <button className="button button--ghost" type="button" onClick={() => onConvert(draft)} disabled={draft.status === "Ganado"}>Convertir en cliente</button>
+            </div>
           </section>
         ) : null}
       </div>
@@ -348,23 +393,23 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Decision({ label, value }: { label: string; value: string }) {
+function ScoreFactor({ label, score, text }: { label: string; score: number; text: string }) {
   return (
-    <div className="decision-card">
+    <article className="score-factor">
       <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
+      <strong>{score || "-"}</strong>
+      <p>{text}</p>
+    </article>
   );
 }
 
-function AuditLine({ label, value, source, confidence }: { label: string; value: string; source: string; confidence: string }) {
+function DiagnosticCard({ title, value, source }: { title: string; value: string; source: string }) {
   return (
-    <div className="audit-line">
-      <strong>{label}</strong>
-      <span>{value}</span>
-      <small>{source}</small>
-      <em>{confidence}</em>
-    </div>
+    <article className="diagnostic-card">
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <em>{source}</em>
+    </article>
   );
 }
 
@@ -407,7 +452,7 @@ function Timeline({ activities, tasks, notes }: { activities: LeadActivity[]; ta
           <span>{task.dueAt ? new Date(task.dueAt).toLocaleString("es-ES") : "Sin fecha"} · {task.status}</span>
         </article>
       ))}
-      {activities.slice(0, 6).map((activity) => (
+      {activities.slice(0, 8).map((activity) => (
         <article key={activity.id}>
           <strong>{activity.type}</strong>
           <span>{activity.result || activity.nextAction || "Actividad registrada"}</span>
@@ -433,6 +478,17 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
   );
 }
 
+function SelectField({ label, value, options, onChange }: { label: string; value: string; options: readonly string[]; onChange: (value: string) => void }) {
+  return (
+    <label>
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </label>
+  );
+}
+
 function DateField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label>
@@ -452,50 +508,89 @@ function TextArea({ label, value, onChange }: { label: string; value: string; on
 }
 
 function saveStatusLabel(status: "idle" | "saving" | "saved" | "error") {
-  if (status === "saving") return "Guardando...";
+  if (status === "saving") return "Guardando";
   if (status === "saved") return "Guardado";
   if (status === "error") return "Error";
   return "Guardar";
 }
 
-function buildDemo(lead: Lead) {
-  const hasDemand = lead.reviews >= 60 || lead.rating >= 4.4;
-  const problem = hasDemand
-    ? `Tiene demanda visible, pero conviene convertir esa atención en contactos medibles. ${missingSignal(lead)}`
-    : `Antes de vender una propuesta fuerte hay que verificar demanda, contacto y presencia digital. ${missingSignal(lead)}`;
-  const opportunity = lead.phone || lead.whatsappUrl
-    ? "Hay vía directa para activar WhatsApp Business, campañas Meta y seguimiento rápido."
-    : "La oportunidad empieza por encontrar un canal de contacto fiable y una oferta sencilla.";
-  const proposal = `${recommendServicePlan(lead).name}: contenido profesional, landing/captación local, Google Business Profile, WhatsApp Business y Meta Ads con seguimiento.`;
+function applyLocalProposal(lead: Lead): Lead {
+  const pitch = buildPitch(lead);
+  const plan = recommendServicePlan(lead);
+  return {
+    ...lead,
+    problemDetected: lead.problemDetected || pitch.problem,
+    opportunityDetected: lead.opportunityDetected || pitch.opportunity,
+    salesHook: lead.salesHook || pitch.hook,
+    recommendedService: lead.recommendedService || plan.focus,
+    recommendedOffer: lead.recommendedOffer || plan.name,
+    probableObjection: lead.probableObjection || pitch.objection,
+    inPersonArgument: lead.inPersonArgument || pitch.thirtySeconds,
+    nextAction: lead.nextAction || pitch.nextStep,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function buildPitch(lead: Lead) {
+  const plan = recommendServicePlan(lead);
+  const gap = gapText(lead);
+  const demand = demandText(lead);
+  const problem = lead.reviews >= 60
+    ? `Tiene demanda local, pero no está claro que esa atención se convierta en consultas medibles. ${gap}`
+    : `Conviene validar la demanda y ordenar la captación antes de vender una mensualidad grande. ${gap}`;
+  const opportunity = `Firekworks puede unir contenido profesional, Meta Ads, Google Business Profile, WhatsApp Business y una landing local para captar clientes en ${lead.city}.`;
+  const hook = `${demand}. ${gap}. La propuesta entra por captación local con contenido audiovisual propio.`;
 
   return {
     problem,
     opportunity,
-    proposal,
-    hook: hasDemand ? "Demanda visible + brecha digital = ángulo de venta claro." : "Validar primero, proponer después.",
-    landing: `Landing breve para ${lead.name}: prueba social, oferta local, WhatsApp visible, formulario y palabras clave de ${lead.city}.`,
-    ads: `Campaña Meta local con creatividad audiovisual, radio cercano a ${lead.city} y objetivo WhatsApp/leads.`,
-    cta: "Proponer diagnóstico presencial de 15 minutos y una demo visual antes de vender mensualidad."
+    hook,
+    reason: `${lead.score} puntos por demanda, brecha digital, encaje Firekworks y facilidad de visita.`,
+    thirtySeconds: `He visto ${lead.name} y creo que hay una oportunidad sencilla: convertir más búsquedas y visitas locales en consultas por WhatsApp con contenido profesional, Google Business bien trabajado y una campaña Meta Ads pequeña pero medible. Os enseñaría una demo visual y, si encaja, empezamos con ${plan.name}.`,
+    objection: "Si la objeción es precio, empezar con una visita y un plan de arranque. Si es tiempo, grabar todo en una sesión mensual. Si es duda, enseñar demo antes de pedir decisión.",
+    nextStep: "Proponer visita presencial de 15 minutos y preparar una demo visual."
   };
 }
 
-function buildMessages(lead: Lead) {
-  const hook = lead.reviews >= 60
-    ? `he visto que tenéis bastante movimiento en Google (${lead.reviews} reseñas)`
-    : "estoy revisando negocios locales con margen para captar más clientes";
-  const gap = missingSignal(lead);
-
+function buildVisitScript(lead: Lead) {
+  const pitch = buildPitch(lead);
   return {
-    whatsapp: `Hola, soy Firekworks. ${hook}. ${gap} Si te encaja, puedo enseñarte una idea muy breve para convertir más visitas en consultas por WhatsApp.`,
-    instagram: `Hola, soy Firekworks. Trabajo captación local con contenido profesional, Meta Ads, Google Business y WhatsApp. He visto una oportunidad para ${lead.name}: ${gap}`,
-    visit: `Entraría con un diagnóstico corto: demanda visible, hueco digital, propuesta de contenido/ads y siguiente paso simple para captar clientes locales.`,
-    objections: "Precio: empezar con plan de arranque. Tiempo: una visita mensual. Dudas: mostrar ejemplo visual antes de pedir decisión."
+    opening: `Hola, soy Firekworks. Estoy revisando comercios de ${lead.city} con margen para captar más clientes localmente. En vuestro caso he visto: ${demandText(lead)} y ${gapText(lead).toLowerCase()}.`,
+    questions: [
+      "¿De dónde os llegan ahora la mayoría de clientes nuevos?",
+      "¿Usáis WhatsApp Business con respuestas, catálogo o etiquetas?",
+      "¿Tenéis Google Business Profile actualizado con fotos y reseñas recientes?",
+      "¿Qué servicio o producto os interesa vender más este mes?",
+      "Si una campaña trae consultas, ¿quién las responde y cuándo?"
+    ].join("\n"),
+    close: "Si te parece, preparo una demo visual de cómo quedaría una campaña local con vídeos/fotos reales del negocio y te digo qué inversión mínima tendría sentido en Meta Ads.",
+    objections: pitch.objection,
+    argument: pitch.thirtySeconds
   };
 }
 
-function missingSignal(lead: Lead) {
-  if (!lead.website) return "No he verificado una web/landing clara para convertir búsquedas en clientes.";
-  if (!lead.instagramUrl) return "No he verificado un Instagram claro para reforzar confianza visual.";
-  if (!lead.whatsappUrl) return "No he verificado WhatsApp como canal principal de conversión.";
-  return "La mejora estaría en ordenar campaña, contenido y seguimiento.";
+function demandText(lead: Lead) {
+  if (lead.reviews && lead.rating) return `${lead.rating}★ · ${lead.reviews} reseñas`;
+  if (lead.reviews) return `${lead.reviews} reseñas`;
+  return "Demanda pendiente";
+}
+
+function gapText(lead: Lead) {
+  if (!lead.website) return "Sin web/landing clara";
+  if (!lead.instagramUrl) return "Instagram pendiente";
+  if (!lead.whatsappUrl) return "WhatsApp no verificado";
+  if (lead.contentUse === "Sin uso" || lead.contentUse === "Flojo") return `Contenido ${lead.contentUse.toLowerCase()}`;
+  return "Optimización de captación";
+}
+
+function paymentText(lead: Lead) {
+  const monthly = estimateMonthlyValue(lead);
+  if (monthly) return `Potencial ${monthly}€/mes`;
+  if (lead.reviews >= 80) return "Negocio activo";
+  return "Validar ticket";
+}
+
+function fitText(lead: Lead) {
+  const plan = recommendServicePlan(lead);
+  return `${plan.visits} · ${plan.content}`;
 }

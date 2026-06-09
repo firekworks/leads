@@ -120,6 +120,15 @@ export type Lead = {
   recommendedOffer?: string;
   score: number;
   scoreTotal?: number;
+  scoreDemand?: number;
+  scorePaymentCapacity?: number;
+  scoreDigitalGap?: number;
+  scoreFit?: number;
+  scoreVisitability?: number;
+  scorePenalties?: number;
+  scoreConfidence?: number;
+  scoreUpdatedAt?: string;
+  scoreDemandaVisible?: number;
   scorePresenciaDigital?: number;
   scoreUrgencia?: number;
   scoreDinero?: number;

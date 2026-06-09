@@ -33,7 +33,6 @@ export async function POST(request: Request, { params }: Params) {
     const lead = byId.get(leadId);
     return lead ? [lead] : [];
   });
-  const url = buildGoogleMapsRouteUrl(ordered);
 
-  return NextResponse.json({ url });
+  return NextResponse.json({ url: buildGoogleMapsRouteUrl(ordered) });
 }

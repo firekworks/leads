@@ -76,6 +76,14 @@ export type LeadRow = {
   recommended_offer?: string | null;
   score: number | null;
   score_total?: number | null;
+  score_demand?: number | null;
+  score_payment_capacity?: number | null;
+  score_digital_gap?: number | null;
+  score_fit?: number | null;
+  score_visitability?: number | null;
+  score_penalties?: number | null;
+  score_confidence?: number | null;
+  score_updated_at?: string | null;
   score_presencia_digital?: number | null;
   score_urgencia?: number | null;
   score_dinero?: number | null;
@@ -154,6 +162,14 @@ export function normalizeLocal(leads: Lead[]) {
       inPersonArgument: lead.inPersonArgument || "",
       recommendedOffer: lead.recommendedOffer || "",
       scoreTotal: lead.scoreTotal || lead.score || 0,
+      scoreDemand: lead.scoreDemand || lead.scoreDemandaVisible || 0,
+      scorePaymentCapacity: lead.scorePaymentCapacity || lead.scoreDinero || 0,
+      scoreDigitalGap: lead.scoreDigitalGap || lead.scorePresenciaDigital || 0,
+      scoreFit: lead.scoreFit || 0,
+      scoreVisitability: lead.scoreVisitability || lead.scorePrioridadVisita || 0,
+      scorePenalties: lead.scorePenalties || 0,
+      scoreConfidence: lead.scoreConfidence || 0,
+      scoreUpdatedAt: lead.scoreUpdatedAt || "",
       scorePresenciaDigital: lead.scorePresenciaDigital || 0,
       scoreUrgencia: lead.scoreUrgencia || 0,
       scoreDinero: lead.scoreDinero || 0,
@@ -242,6 +258,14 @@ export function fromLeadRow(row: LeadRow): Lead {
     recommendedOffer: row.recommended_offer || "",
     score: Number(row.score || 0),
     scoreTotal: Number(row.score_total || row.score || 0),
+    scoreDemand: Number(row.score_demand ?? row.score_total ?? row.score ?? 0),
+    scorePaymentCapacity: Number(row.score_payment_capacity ?? row.score_dinero ?? 0),
+    scoreDigitalGap: Number(row.score_digital_gap ?? row.score_presencia_digital ?? 0),
+    scoreFit: Number(row.score_fit ?? 0),
+    scoreVisitability: Number(row.score_visitability ?? row.score_prioridad_visita ?? 0),
+    scorePenalties: Number(row.score_penalties ?? 0),
+    scoreConfidence: Number(row.score_confidence ?? 0),
+    scoreUpdatedAt: row.score_updated_at || "",
     scorePresenciaDigital: Number(row.score_presencia_digital || 0),
     scoreUrgencia: Number(row.score_urgencia || 0),
     scoreDinero: Number(row.score_dinero || 0),
@@ -336,6 +360,14 @@ export function toLeadRow(lead: Lead): LeadRow {
     recommended_offer: normalized.recommendedOffer,
     score: normalized.score,
     score_total: normalized.scoreTotal,
+    score_demand: normalized.scoreDemand,
+    score_payment_capacity: normalized.scorePaymentCapacity,
+    score_digital_gap: normalized.scoreDigitalGap,
+    score_fit: normalized.scoreFit,
+    score_visitability: normalized.scoreVisitability,
+    score_penalties: normalized.scorePenalties,
+    score_confidence: normalized.scoreConfidence,
+    score_updated_at: normalized.scoreUpdatedAt || new Date().toISOString(),
     score_presencia_digital: normalized.scorePresenciaDigital,
     score_urgencia: normalized.scoreUrgencia,
     score_dinero: normalized.scoreDinero,

@@ -46,12 +46,12 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
           {lead.city} · {lead.sector}
         </small>
         <span className="lead-card__state">
-          {shortStatus(lead.status)} · {lead.validationStatus === "validado" ? "Validado" : lead.validationStatus === "descartado" ? "Descartado" : "Pendiente de validar"}
+          {shortStatus(lead.status)} · IG {lead.followersBucket} · {lead.contentUse}
         </span>
         <span className="lead-signal-row" aria-label="Señales del lead">
           {signals.map((signal) => (
             <span
-              className={`lead-signal lead-signal--${signal.state}`}
+              className={`lead-signal lead-signal--${signal.state} lead-signal--${signal.id}`}
               key={signal.id}
               title={signal.label}
               aria-label={`${signal.label}: ${signal.state}`}
@@ -67,7 +67,7 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
           <strong>{lead.score}</strong>
           <small>{temperature}</small>
         </span>
-        <span className={`status-pill status-pill--${statusTone(lead.status)}`}>{temperature}</span>
+        <span className={`status-pill status-pill--${statusTone(lead.status)}`}>{shortStatus(lead.status)}</span>
       </span>
     </motion.button>
   );
@@ -76,12 +76,11 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
 function cardSignals(lead: Lead) {
   return [
     signal("ig", "IG", "Instagram", Boolean(lead.instagramUrl), lead.instagramStatus === "pendiente"),
+    signal("fb", "FB", "Facebook", Boolean(lead.facebookUrl), false),
     signal("web", "W", "Web", Boolean(lead.website), false),
-    signal("phone", "T", "Teléfono", Boolean(lead.phone || lead.whatsappUrl), false),
-    signal("maps", "M", "Google Maps", Boolean(lead.googleMapsUrl || lead.signals.googleProfile), false),
-    signal("money", "€", "Potencial estimado; facturación no verificada", Boolean(lead.adsSignal), true),
-    signal("media", "AV", "Medios", Boolean(lead.googlePhotos >= 12 || lead.contentUse === "Muy trabajado"), lead.contentUse === "Pendiente"),
-    signal("ads", "AD", "Ads", Boolean(lead.adsSignal), true)
+    signal("wa", "WA", "WhatsApp", Boolean(lead.whatsappUrl || lead.phone), false),
+    signal("maps", "G", "Google Maps", Boolean(lead.googleMapsUrl || lead.signals.googleProfile), false),
+    signal("media", "AV", "Visual", Boolean(lead.googlePhotos >= 12 || lead.contentUse === "Muy trabajado"), lead.contentUse === "Pendiente")
   ];
 }
 

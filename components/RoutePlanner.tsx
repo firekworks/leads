@@ -9,21 +9,23 @@ type RoutePlannerProps = {
   onSelect: (lead: RouteStop) => void;
   onMarkVisited?: (leads: RouteStop[]) => void;
   onSaveRoute?: (leads: RouteStop[]) => void;
+  onCreateCalendar?: (leads: RouteStop[]) => void;
 };
 
 const ROUTE_PAGE_SIZE = 60;
 const minScores = {
-  Revisar: 0,
-  Frío: 25,
-  Templado: 50,
-  Caliente: 70,
+  Frío: 0,
+  Revisar: 45,
+  Caliente: 65,
   "Muy caliente": 80
 } as const;
 
 type MinTemperature = keyof typeof minScores | "";
 
-export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute }: RoutePlannerProps) {
+export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute, onCreateCalendar }: RoutePlannerProps) {
   const [city, setCity] = useState("");
+  const [sector, setSector] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [minTemperature, setMinTemperature] = useState<MinTemperature>("");
   const [onlyPhone, setOnlyPhone] = useState(false);
   const [onlyMaps, setOnlyMaps] = useState(false);
@@ -32,14 +34,20 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute }: Ro
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const cities = useMemo(() => Array.from(new Set(stops.map((stop) => stop.city).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es")), [stops]);
+  const sectors = useMemo(() => Array.from(new Set(stops.map((stop) => stop.sector).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es")), [stops]);
+  const statuses = useMemo(() => Array.from(new Set(stops.map((stop) => stop.status).filter(Boolean))).sort((a, b) => a.localeCompare(b, "es")), [stops]);
 
   const filteredStops = useMemo(() => {
     const minScore = minTemperature ? minScores[minTemperature] : 0;
     return stops
       .filter((stop) => {
         const matchesCity = city ? stop.city === city : true;
+        const matchesSector = sector ? stop.sector === sector : true;
+        const matchesStatus = statusFilter ? stop.status === statusFilter : true;
         return (
           matchesCity &&
+          matchesSector &&
+          matchesStatus &&
           stop.score >= minScore &&
           !stop.isInvalid &&
           !stop.isDisqualified &&
@@ -51,7 +59,7 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute }: Ro
         if (sortBy === "nearby") return `${a.city}${a.address}`.localeCompare(`${b.city}${b.address}`, "es") || b.score - a.score;
         return b.score - a.score;
       });
-  }, [city, minTemperature, onlyMaps, onlyPhone, sortBy, stops]);
+  }, [city, minTemperature, onlyMaps, onlyPhone, sector, sortBy, statusFilter, stops]);
 
   const visibleStops = filteredStops.slice(0, visibleCount);
   const selectedStops = selectedIds
@@ -60,7 +68,7 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute }: Ro
 
   useEffect(() => {
     setVisibleCount(ROUTE_PAGE_SIZE);
-  }, [city, minTemperature, onlyMaps, onlyPhone, sortBy, stops]);
+  }, [city, minTemperature, onlyMaps, onlyPhone, sector, sortBy, statusFilter, stops]);
 
   useEffect(() => {
     setSelectedIds((current) => current.filter((id) => stops.some((stop) => stop.id === id)));
@@ -81,14 +89,13 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute }: Ro
   }
 
   function mapsUrl() {
-    const route = selectedStops.slice(0, 8);
+    const route = selectedStops.slice(0, 9);
     if (!route.length) return "";
-    const [first, ...rest] = route;
-    const destination = rest.at(-1) || first;
-    const waypoints = rest.slice(0, -1).map(stopQuery).join("|");
+    const destination = route.at(-1)!;
+    const waypoints = route.slice(0, -1).map(stopQuery).join("|");
     const params = new URLSearchParams({
       api: "1",
-      origin: stopQuery(first),
+      origin: "Castalla, Alicante, España",
       destination: stopQuery(destination),
       travelmode: "driving"
     });
@@ -97,11 +104,9 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute }: Ro
   }
 
   function copyList() {
-    const route = selectedStops;
-    if (!route.length) return;
-    void navigator.clipboard?.writeText(
-      route.map((stop, index) => `${index + 1}. ${stop.name} · ${stop.city} · ${stop.address || stop.googleMapsUrl || ""}`).join("\n")
-    );
+    const url = mapsUrl();
+    if (!url) return;
+    void navigator.clipboard?.writeText(url);
   }
 
   return (
@@ -111,9 +116,17 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute }: Ro
           <option value="">Ciudad</option>
           {cities.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
+        <select value={sector} onChange={(event) => setSector(event.target.value)} aria-label="Sector ruta">
+          <option value="">Sector</option>
+          {sectors.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
         <select value={minTemperature} onChange={(event) => setMinTemperature(event.target.value as MinTemperature)} aria-label="Temperatura mínima">
           <option value="">Temperatura mínima</option>
           {Object.keys(minScores).map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Estado ruta">
+          <option value="">Estado</option>
+          {statuses.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
         <select value={sortBy} onChange={(event) => setSortBy(event.target.value as "score" | "nearby")} aria-label="Orden">
           <option value="score">Temperatura</option>
@@ -159,7 +172,7 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute }: Ro
 
         <section className="route-selection">
           <header>
-            <span>Ruta</span>
+            <span>Ruta de hoy</span>
             <strong>{selectedStops.length}</strong>
           </header>
 
@@ -194,16 +207,19 @@ export function RoutePlanner({ stops, onSelect, onMarkVisited, onSaveRoute }: Ro
 
           <div className="route-actions">
             <a className="button" href={mapsUrl() || undefined} target="_blank" rel="noreferrer" aria-disabled={!selectedStops.length}>
-              Abrir en Maps
+              Google Maps
             </a>
             <button className="button button--ghost" type="button" onClick={copyList} disabled={!selectedStops.length}>
-              Copiar ruta
+              Copiar enlace
             </button>
             <button className="button button--ghost" type="button" onClick={() => onMarkVisited?.(selectedStops)} disabled={!selectedStops.length}>
-              Marcar visitados
+              Visitados
             </button>
             <button className="button button--ghost" type="button" onClick={() => onSaveRoute?.(selectedStops)} disabled={!selectedStops.length}>
-              Guardar ruta
+              Guardar
+            </button>
+            <button className="button button--ghost" type="button" onClick={() => onCreateCalendar?.(selectedStops)} disabled={!selectedStops.length}>
+              Calendario
             </button>
           </div>
         </section>
