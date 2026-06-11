@@ -89,7 +89,7 @@ export function Filters({
         status && `Estado: ${status}`,
         followersBucket && `IG: ${followersBucket}`,
         contentUse && `Contenido: ${contentUse}`,
-        minScore ? `Score +${minScore}` : "",
+        minScore ? `Prioridad +${minScore}` : "",
         contactEasyOnly && "Con teléfono/WhatsApp",
         withoutInstagram && "Sin Instagram",
         withoutFacebook && "Sin Facebook",
@@ -147,7 +147,7 @@ export function Filters({
           <input
             value={query}
             onChange={(event) => onQuery(event.target.value)}
-            placeholder="Buscar comercio, ciudad o sector"
+            placeholder="Buscar comercio, ciudad, sector o nota"
           />
         </label>
         <button className="button button--ghost filters__toggle" type="button" onClick={() => setOpen((value) => !value)}>
@@ -224,7 +224,7 @@ export function Filters({
           </select>
 
           <label className="score-filter">
-            <span>Score mínimo</span>
+            <span>Prioridad mínima</span>
             <input
               type="number"
               min={0}

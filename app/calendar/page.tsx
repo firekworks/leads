@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function CalendarPage() {
-  redirect("/route");
+  redirect("/opportunities?mode=route");
 }

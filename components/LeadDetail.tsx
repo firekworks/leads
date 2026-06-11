@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ContentUse, FollowersBucket, Lead, LeadActivity, LeadNote, LeadStatus, LeadTask } from "@/types/lead";
 import { googleSearchUrls } from "@/lib/leads-repository";
-import { estimateAdBudget, estimateMonthlyValue, recommendServicePlan, scoreLabel } from "@/lib/scoring";
+import { estimateAdBudget, estimateMonthlyValue, recommendServicePlan, scoreLabel, scoreTone } from "@/lib/scoring";
 import { statusTone } from "@/lib/status";
-import { ScoreRing } from "@/components/ScoreRing";
 
 type LeadDetailProps = {
   lead: Lead;
@@ -27,7 +26,7 @@ type LeadDetailProps = {
 
 const followersBuckets: FollowersBucket[] = ["Pendiente", "Sin cuenta", "< 1.000", "1.000 - 5.000", "+5.000"];
 const contentUses: ContentUse[] = ["Pendiente", "Sin uso", "Flojo", "Activo", "Muy trabajado"];
-const tabs = ["Resumen", "Diagnóstico", "Propuesta", "Visita", "Historial"] as const;
+const tabs = ["Resumen", "Acción", "Historial"] as const;
 type DetailTab = (typeof tabs)[number];
 
 export function LeadDetail({
@@ -63,7 +62,8 @@ export function LeadDetail({
   const adBudget = estimateAdBudget(draft);
   const pitch = buildPitch(draft);
   const visitScript = buildVisitScript(draft);
-  const hasProposalData = Boolean(draft.problemDetected || draft.opportunityDetected || draft.recommendedService || draft.recommendedOffer);
+  const phoneHref = draft.phone ? `tel:${draft.phone.replace(/[^\d+]/g, "")}` : "";
+  const whatsappHref = draft.whatsappUrl || (draft.phone ? `https://wa.me/${draft.phone.replace(/[^\d]/g, "")}` : "");
 
   useEffect(() => {
     dirtyRef.current = false;
@@ -163,12 +163,12 @@ export function LeadDetail({
       if (!response.ok || !payload.lead) throw new Error(payload.error || "No se pudo preparar");
       setDraft(payload.lead);
       await onSave(payload.lead);
-      setVisitStatus("Guion guardado");
+      setVisitStatus("Argumento guardado");
     } catch {
       const nextLead = { ...draft, inPersonArgument: visitScript.argument, updatedAt: new Date().toISOString() };
       setDraft(nextLead);
       await onSave(nextLead);
-      setVisitStatus("Guion local guardado");
+      setVisitStatus("Argumento local guardado");
     }
   }
 
@@ -183,32 +183,16 @@ export function LeadDetail({
         x
       </button>
 
-      <div className="lead-detail__top">
+      <div className="lead-detail__top lead-detail__top--simple">
         <div className="lead-title-block">
           <span className="eyebrow">Ficha comercial</span>
           <h2>{draft.name}</h2>
-          <p>{draft.city} · {draft.sector}</p>
+          <p>{draft.city || "Sin ciudad"} · {draft.sector || "Sin sector"}</p>
           <div className="stage-row">
-            <span className={`status-pill status-pill--${statusTone(draft.status)}`}>{draft.status}</span>
-            <button type="button" onClick={moveToNextStage}>Avanzar</button>
+            <span className={`status-pill status-pill--${statusTone(draft.status)}`}>{shortStatus(draft.status)}</span>
+            <span className={`temperature-dot temperature-dot--${scoreTone(draft.score)}`}>{scoreLabel(draft.score)} · {draft.score}</span>
           </div>
         </div>
-        <ScoreRing score={draft.score} label={scoreLabel(draft.score)} />
-      </div>
-
-      <div className="detail-actions detail-actions--primary">
-        <button className="button button--primary" type="button" onClick={() => onEnrich(draft)} disabled={enriching}>
-          {enriching ? "Enriqueciendo" : "Enriquecer"}
-        </button>
-        <button className="button button--ghost" type="button" onClick={() => update("nextFollowUpType", "ruta")}>
-          Añadir ruta
-        </button>
-        <a className="button button--ghost" href={draft.googleMapsUrl || searchUrls.googleMaps} target="_blank" rel="noreferrer">
-          Maps
-        </a>
-        <button className="button button--ghost" type="button" onClick={() => saveDraft()}>
-          {saveStatusLabel(saveStatus)}
-        </button>
       </div>
 
       <nav className="detail-tabs" aria-label="Secciones de la ficha">
@@ -224,20 +208,31 @@ export function LeadDetail({
         ))}
       </nav>
 
-      <div className="detail-form">
+      <div className="detail-form detail-form--single">
         {activeTab === "Resumen" ? (
           <section className="detail-section detail-section--wide">
             <div className="detail-summary detail-summary--decision">
-              <MiniStat label="Temperatura" value={scoreLabel(draft.score)} />
-              <MiniStat label="Mensualidad" value={monthlyValue ? `≈ ${monthlyValue}€` : "Validar"} />
-              <MiniStat label="Ads" value={`≈ ${adBudget}€`} />
-              <MiniStat label="Siguiente" value={draft.nextAction || "Definir visita"} />
+              <MiniStat label="Temperatura" value={`${scoreLabel(draft.score)} · ${draft.score}`} />
+              <MiniStat label="Google" value={demandText(draft)} />
+              <MiniStat label="Potencial" value={monthlyValue ? `≈ ${monthlyValue}€/mes` : "Validar"} />
+              <MiniStat label="Validación" value={draft.validationStatus || "Pendiente"} />
+            </div>
+
+            <div className="contact-grid">
+              <DataItem tone="google" label="Google Maps" value={draft.googleMapsUrl ? "Abrir ficha" : "Pendiente"} href={draft.googleMapsUrl || searchUrls.googleMaps} />
+              <DataItem tone="whatsapp" label="WhatsApp" value={draft.whatsappUrl || draft.phone || "No detectado"} href={whatsappHref} />
+              <DataItem tone="instagram" label="Instagram" value={draft.instagramUrl ? "Abrir perfil" : "Pendiente"} href={draft.instagramUrl || searchUrls.instagram} />
+              <DataItem tone="facebook" label="Facebook" value={draft.facebookUrl ? "Abrir página" : "Pendiente"} href={draft.facebookUrl || searchUrls.facebook} />
+              <DataItem tone="web" label="Web" value={draft.website || "No detectada"} href={draft.website} />
+              <DataItem tone="neutral" label="Teléfono" value={draft.phone || "Pendiente"} href={phoneHref} />
+              <DataItem tone="neutral" label="Dirección" value={draft.address || "Pendiente"} />
+              <DataItem tone="neutral" label="Dueño/contacto" value={draft.ownerName || "Pendiente"} />
             </div>
 
             <div className="score-factor-grid">
               <ScoreFactor label="Demanda" score={draft.scoreDemand ?? draft.scoreDemandaVisible ?? 0} text={demandText(draft)} />
               <ScoreFactor label="Brecha digital" score={draft.scoreDigitalGap ?? draft.scorePresenciaDigital ?? 0} text={gapText(draft)} />
-              <ScoreFactor label="Pago" score={draft.scorePaymentCapacity ?? draft.scoreDinero ?? 0} text={paymentText(draft)} />
+              <ScoreFactor label="Contacto" score={draft.scoreVisitability ?? draft.scoreFacilidadContacto ?? 0} text={contactText(draft)} />
               <ScoreFactor label="Encaje" score={draft.scoreFit ?? 0} text={fitText(draft)} />
             </div>
 
@@ -247,10 +242,8 @@ export function LeadDetail({
               ))}
             </div>
 
-            <TextArea label="Próximo paso" value={draft.nextAction} onChange={(value) => update("nextAction", value)} />
-
             <details className="edit-accordion">
-              <summary>Editar datos</summary>
+              <summary>Editar datos clave</summary>
               <div className="edit-grid">
                 <Field label="Nombre" value={draft.name} onChange={(value) => update("name", value)} />
                 <Field label="Sector" value={draft.sector} onChange={(value) => update("sector", value)} />
@@ -262,88 +255,57 @@ export function LeadDetail({
                 <Field label="Facebook" value={draft.facebookUrl} onChange={(value) => update("facebookUrl", value)} />
                 <Field label="WhatsApp" value={draft.whatsappUrl} onChange={(value) => update("whatsappUrl", value)} />
                 <Field label="Dueño/contacto" value={draft.ownerName} onChange={(value) => update("ownerName", value)} />
-                <SelectField label="Estado" value={draft.status} options={statuses} onChange={(value) => setStatus(value as LeadStatus)} />
                 <SelectField label="Seguidores IG" value={draft.followersBucket} options={followersBuckets} onChange={(value) => update("followersBucket", value as FollowersBucket)} />
                 <SelectField label="Contenido" value={draft.contentUse} options={contentUses} onChange={(value) => update("contentUse", value as ContentUse)} />
-                <DateField label="Seguimiento" value={draft.nextFollowUpAt?.slice(0, 16) || ""} onChange={(value) => update("nextFollowUpAt", value)} />
               </div>
             </details>
           </section>
         ) : null}
 
-        {activeTab === "Diagnóstico" ? (
+        {activeTab === "Acción" ? (
           <section className="detail-section detail-section--wide">
-            <div className="diagnostic-stack">
-              <DiagnosticCard title="Presencia local" value={demandText(draft)} source={draft.placeId ? "Google Places" : "Pendiente"} />
-              <DiagnosticCard title="Presencia digital" value={gapText(draft)} source={draft.website || draft.instagramUrl ? "Web/redes" : "Manual"} />
-              <DiagnosticCard title="Capacidad de pago" value={paymentText(draft)} source="Inferido" />
-              <DiagnosticCard title="Dolor probable" value={draft.problemDetected || pitch.problem} source={hasProposalData ? "Verificado/interno" : "Inferido"} />
+            <div className="action-grid">
+              <SelectField label="Estado comercial" value={draft.status} options={statuses} onChange={(value) => setStatus(value as LeadStatus)} />
+              <Field label="Responsable" value={draft.assignedTo || ""} onChange={(value) => update("assignedTo", value)} />
+              <DateField label="Fecha próxima acción" value={draft.nextFollowUpAt?.slice(0, 16) || ""} onChange={(value) => update("nextFollowUpAt", value)} />
+              <Field label="Próxima acción" value={draft.nextAction || ""} onChange={(value) => update("nextAction", value)} />
+              <TextArea label="Nota comercial breve" value={draft.pain || ""} onChange={(value) => update("pain", value)} />
+              <TextArea label="Objeción principal" value={draft.probableObjection || ""} onChange={(value) => update("probableObjection", value)} />
             </div>
-            <details className="source-accordion">
-              <summary>Ver fuentes</summary>
-              <div className="source-list source-list--compact">
-                <SourceLine label="Google Places" value={draft.placeId || "Pendiente"} />
-                <SourceLine label="Web" value={draft.website || "Sin web"} />
-                <SourceLine label="Instagram" value={draft.instagramUrl || "Pendiente manual"} />
-                <SourceLine label="Facebook" value={draft.facebookUrl || "Pendiente manual"} />
-                <SourceLine label="Meta Ads" value={draft.adsSignal || "No verificado"} />
-                <SourceLine label="Última revisión" value={draft.lastEnrichedAt || draft.lastRefreshedAt || "Pendiente"} />
-              </div>
-            </details>
-            <div className="quick-actions">
-              <a href={searchUrls.instagram} target="_blank" rel="noreferrer">Buscar Instagram</a>
-              <a href={searchUrls.facebook} target="_blank" rel="noreferrer">Buscar Facebook</a>
-              <a href={searchUrls.owner} target="_blank" rel="noreferrer">Buscar dueño</a>
-              <button type="button" onClick={() => onFindOwner(draft)} disabled={findingOwner || !draft.placeId}>
-                {findingOwner ? "Buscando" : "Reseñas"}
+
+            <MessageBlock title="Qué decirle al entrar" text={draft.inPersonArgument || pitch.thirtySeconds} onCopy={copyText} />
+            <TextArea label="Argumento presencial" value={draft.inPersonArgument || pitch.thirtySeconds} onChange={(value) => update("inPersonArgument", value)} />
+
+            <div className="detail-actions detail-actions--primary">
+              <a className="button button--ghost" href={phoneHref || undefined} aria-disabled={!phoneHref}>Llamar</a>
+              <a className="button button--ghost" href={whatsappHref || undefined} target="_blank" rel="noreferrer" aria-disabled={!whatsappHref}>WhatsApp</a>
+              <a className="button button--ghost" href={draft.googleMapsUrl || searchUrls.googleMaps} target="_blank" rel="noreferrer">Abrir Maps</a>
+              <a className="button button--ghost" href={draft.website || undefined} target="_blank" rel="noreferrer" aria-disabled={!draft.website}>Abrir web</a>
+              <a className="button button--ghost" href={draft.instagramUrl || searchUrls.instagram} target="_blank" rel="noreferrer">Instagram</a>
+              <a className="button button--ghost" href={draft.facebookUrl || searchUrls.facebook} target="_blank" rel="noreferrer">Facebook</a>
+              <button className="button button--ghost" type="button" onClick={() => onFindOwner(draft)} disabled={findingOwner || !draft.placeId}>
+                {findingOwner ? "Buscando" : "Buscar dueño"}
               </button>
-            </div>
-          </section>
-        ) : null}
-
-        {activeTab === "Propuesta" ? (
-          <section className="detail-section detail-section--wide">
-            {!hasProposalData ? (
-              <div className="proposal-state">
-                <strong>Faltan datos para afinar</strong>
-                <span>Puede generarse una propuesta base, pero será mejor tras enriquecer web, redes y Google.</span>
-                <div className="detail-empty-actions">
-                  <button className="button button--ghost" type="button" onClick={() => onEnrich(draft)}>Enriquecer Google/web</button>
-                  <a className="button button--ghost" href={searchUrls.instagram} target="_blank" rel="noreferrer">Añadir Instagram</a>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="demo-grid">
-              <DemoBlock title="Dolor" text={draft.problemDetected || pitch.problem} />
-              <DemoBlock title="Oportunidad" text={draft.opportunityDetected || pitch.opportunity} />
-              <DemoBlock title="Pack" text={draft.recommendedOffer || plan.name} />
-              <DemoBlock title="Precio" text={monthlyValue ? `Desde ${monthlyValue}€/mes + ads ${adBudget}€ aprox.` : "Validar en visita"} />
-              <DemoBlock title="Demo" text={draft.salesHook || pitch.hook} />
-              <DemoBlock title="Siguiente paso" text={draft.nextAction || pitch.nextStep} />
+              <button className="button button--ghost" type="button" onClick={() => onEnrich(draft)} disabled={enriching}>
+                {enriching ? "Completando" : "Completar ficha"}
+              </button>
+              <button className="button" type="button" onClick={moveToNextStage}>Avanzar etapa</button>
+              <button className="button button--ghost" type="button" onClick={() => setStatus("No contactar")}>Descartar</button>
             </div>
 
-            <MessageBlock title="Pitch 30s" text={draft.inPersonArgument || pitch.thirtySeconds} onCopy={copyText} />
-            <MessageBlock title="Objeción probable" text={draft.probableObjection || pitch.objection} onCopy={copyText} />
-            <button className="button button--primary" type="button" onClick={generateProposal}>
-              Generar propuesta
-            </button>
-            {proposalStatus ? <span className="inline-status">{proposalStatus}</span> : null}
-          </section>
-        ) : null}
-
-        {activeTab === "Visita" ? (
-          <section className="detail-section detail-section--wide">
-            <div className="copy-grid">
-              <MessageBlock title="Apertura" text={visitScript.opening} onCopy={copyText} />
-              <MessageBlock title="Preguntas" text={visitScript.questions} onCopy={copyText} />
-              <MessageBlock title="Cierre suave" text={visitScript.close} onCopy={copyText} />
-              <MessageBlock title="Objeciones" text={visitScript.objections} onCopy={copyText} />
+            <div className="proposal-strip">
+              <DemoBlock title="Oferta recomendada" text={draft.recommendedOffer || plan.name} />
+              <DemoBlock title="Inversión ads" text={`≈ ${adBudget}€/mes`} />
+              <DemoBlock title="Servicio" text={draft.recommendedService || plan.focus} />
             </div>
-            <button className="button button--primary" type="button" onClick={generateVisitScript}>
-              Preparar guion
-            </button>
-            {visitStatus ? <span className="inline-status">{visitStatus}</span> : null}
+
+            <div className="detail-actions">
+              <button className="button button--ghost" type="button" onClick={generateVisitScript}>Preparar argumento</button>
+              <button className="button button--ghost" type="button" onClick={generateProposal}>Generar propuesta</button>
+              <button className="button button--ghost" type="button" onClick={() => onConvert(draft)} disabled={draft.status === "Ganado"}>Convertir en cliente</button>
+              <button className="button button--ghost" type="button" onClick={() => saveDraft()}>{saveStatusLabel(saveStatus)}</button>
+            </div>
+            {proposalStatus || visitStatus ? <span className="inline-status">{proposalStatus || visitStatus}</span> : null}
           </section>
         ) : null}
 
@@ -372,11 +334,6 @@ export function LeadDetail({
               </button>
             </div>
             <Timeline activities={activities} tasks={tasks} notes={notes} />
-            <div className="detail-actions">
-              <button className="button button--ghost" type="button" onClick={() => setStatus("No contactar")}>No contactar</button>
-              <button className="button button--ghost" type="button" onClick={() => setStatus("Perdido")}>Perdido</button>
-              <button className="button button--ghost" type="button" onClick={() => onConvert(draft)} disabled={draft.status === "Ganado"}>Convertir en cliente</button>
-            </div>
           </section>
         ) : null}
       </div>
@@ -393,6 +350,28 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   );
 }
 
+function DataItem({ label, value, href, tone }: { label: string; value: string; href?: string; tone: "google" | "whatsapp" | "instagram" | "facebook" | "web" | "neutral" }) {
+  const content = (
+    <>
+      <span className={`data-item__icon data-item__icon--${tone}`} aria-hidden="true" />
+      <span>
+        <small>{label}</small>
+        <strong>{value || "Pendiente"}</strong>
+      </span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <a className="data-item" href={href} target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noreferrer" : undefined}>
+        {content}
+      </a>
+    );
+  }
+
+  return <div className="data-item">{content}</div>;
+}
+
 function ScoreFactor({ label, score, text }: { label: string; score: number; text: string }) {
   return (
     <article className="score-factor">
@@ -400,25 +379,6 @@ function ScoreFactor({ label, score, text }: { label: string; score: number; tex
       <strong>{score || "-"}</strong>
       <p>{text}</p>
     </article>
-  );
-}
-
-function DiagnosticCard({ title, value, source }: { title: string; value: string; source: string }) {
-  return (
-    <article className="diagnostic-card">
-      <span>{title}</span>
-      <strong>{value}</strong>
-      <em>{source}</em>
-    </article>
-  );
-}
-
-function SourceLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="source-line">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 
@@ -446,22 +406,22 @@ function MessageBlock({ title, text, onCopy }: { title: string; text: string; on
 function Timeline({ activities, tasks, notes }: { activities: LeadActivity[]; tasks: LeadTask[]; notes: LeadNote[] }) {
   return (
     <div className="timeline detail-form__wide">
-      {tasks.slice(0, 3).map((task) => (
+      {tasks.slice(0, 4).map((task) => (
         <article key={task.id}>
           <strong>{task.title}</strong>
-          <span>{task.dueAt ? new Date(task.dueAt).toLocaleString("es-ES") : "Sin fecha"} · {task.status}</span>
+          <span>{task.dueAt ? formatDate(task.dueAt) : "Sin fecha"} · {task.status}</span>
         </article>
       ))}
-      {activities.slice(0, 8).map((activity) => (
+      {activities.slice(0, 10).map((activity) => (
         <article key={activity.id}>
           <strong>{activity.type}</strong>
-          <span>{activity.result || activity.nextAction || "Actividad registrada"}</span>
+          <span>{formatDate(activity.occurredAt || activity.createdAt)} · {activity.result || activity.nextAction || "Actividad registrada"}</span>
         </article>
       ))}
-      {notes.slice(0, 3).map((note) => (
+      {notes.slice(0, 4).map((note) => (
         <article key={note.id}>
           <strong>Nota</strong>
-          <span>{note.note}</span>
+          <span>{formatDate(note.createdAt)} · {note.note}</span>
         </article>
       ))}
       {!tasks.length && !activities.length && !notes.length ? <span className="empty-state">Sin actividad</span> : null}
@@ -555,6 +515,7 @@ function buildPitch(lead: Lead) {
 function buildVisitScript(lead: Lead) {
   const pitch = buildPitch(lead);
   return {
+    argument: `Entrar con enfoque de captación local: ${demandText(lead)}. ${gapText(lead)}. Ofrecer una demo visual con fotos/vídeo, Google Business, WhatsApp y Meta Ads medibles.`,
     opening: `Hola, soy Firekworks. Estoy revisando comercios de ${lead.city} con margen para captar más clientes localmente. En vuestro caso he visto: ${demandText(lead)} y ${gapText(lead).toLowerCase()}.`,
     questions: [
       "¿De dónde os llegan ahora la mayoría de clientes nuevos?",
@@ -564,8 +525,7 @@ function buildVisitScript(lead: Lead) {
       "Si una campaña trae consultas, ¿quién las responde y cuándo?"
     ].join("\n"),
     close: "Si te parece, preparo una demo visual de cómo quedaría una campaña local con vídeos/fotos reales del negocio y te digo qué inversión mínima tendría sentido en Meta Ads.",
-    objections: pitch.objection,
-    argument: pitch.thirtySeconds
+    objections: pitch.objection
   };
 }
 
@@ -578,19 +538,36 @@ function demandText(lead: Lead) {
 function gapText(lead: Lead) {
   if (!lead.website) return "Sin web/landing clara";
   if (!lead.instagramUrl) return "Instagram pendiente";
-  if (!lead.whatsappUrl) return "WhatsApp no verificado";
+  if (!lead.whatsappUrl && !lead.phone) return "Contacto poco claro";
   if (lead.contentUse === "Sin uso" || lead.contentUse === "Flojo") return `Contenido ${lead.contentUse.toLowerCase()}`;
   return "Optimización de captación";
 }
 
-function paymentText(lead: Lead) {
-  const monthly = estimateMonthlyValue(lead);
-  if (monthly) return `Potencial ${monthly}€/mes`;
-  if (lead.reviews >= 80) return "Negocio activo";
-  return "Validar ticket";
+function contactText(lead: Lead) {
+  if (lead.whatsappUrl) return "WhatsApp visible";
+  if (lead.phone) return "Teléfono visible";
+  if (lead.website) return "Contacto desde web";
+  return "Pendiente de validar";
 }
 
 function fitText(lead: Lead) {
   const plan = recommendServicePlan(lead);
   return `${plan.visits} · ${plan.content}`;
+}
+
+function shortStatus(status: LeadStatus) {
+  const labels: Partial<Record<LeadStatus, string>> = {
+    "Reunión agendada": "Reunión",
+    "Diagnóstico hecho": "Visitado",
+    "Propuesta enviada": "Propuesta",
+    Ganado: "Cliente"
+  };
+  return labels[status] || status;
+}
+
+function formatDate(value: string) {
+  if (!value) return "Sin fecha";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
 }

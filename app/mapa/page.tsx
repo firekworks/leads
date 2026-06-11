@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function LegacyMapaPage() {
-  redirect("/radar");
+  redirect("/opportunities?mode=map");
 }

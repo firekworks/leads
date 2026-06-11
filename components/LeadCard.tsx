@@ -9,18 +9,18 @@ type LeadCardProps = {
   lead: Lead;
   active: boolean;
   onSelect: (lead: Lead) => void;
+  onAdvance?: (lead: Lead) => void;
 };
 
-export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
+export function LeadCard({ lead, active, onSelect, onAdvance }: LeadCardProps) {
   const initial = lead.name.trim().slice(0, 1).toUpperCase() || "F";
   const temperature = scoreLabel(lead.score);
-  const signals = cardSignals(lead);
+  const chips = cardSignals(lead).slice(0, 4);
+  const gap = mainGap(lead);
 
   return (
-    <motion.button
-      type="button"
+    <motion.article
       className={active ? "lead-card lead-card--active" : "lead-card"}
-      onClick={() => onSelect(lead)}
       layout
       whileHover={{ y: -1 }}
       transition={{ duration: 0.18 }}
@@ -38,18 +38,22 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
         <span>{initial}</span>
       </span>
 
-      <span className="lead-card__main">
+      <button type="button" className="lead-card__open" onClick={() => onSelect(lead)}>
         <span className="lead-card__title">
           <strong>{lead.name}</strong>
+          <em className={`status-pill status-pill--${statusTone(lead.status)}`}>{shortStatus(lead.status)}</em>
         </span>
-        <small>
-          {lead.city} · {lead.sector}
-        </small>
-        <span className="lead-card__state">
-          {shortStatus(lead.status)} · IG {lead.followersBucket} · {lead.contentUse}
+        <small>{lead.city} · {lead.sector}</small>
+        <span className="lead-card__temperature">
+          <strong className={`temperature-dot temperature-dot--${scoreTone(lead.score)}`}>{temperature} · {lead.score}</strong>
+          <span>Brecha: {gap}</span>
         </span>
+        <span className="lead-card__next">Siguiente: {lead.nextAction || "Definir visita"}</span>
+      </button>
+
+      <span className="lead-card__side">
         <span className="lead-signal-row" aria-label="Señales del lead">
-          {signals.map((signal) => (
+          {chips.map((signal) => (
             <span
               className={`lead-signal lead-signal--${signal.state} lead-signal--${signal.id}`}
               key={signal.id}
@@ -60,27 +64,23 @@ export function LeadCard({ lead, active, onSelect }: LeadCardProps) {
             </span>
           ))}
         </span>
-      </span>
-
-      <span className="lead-card__meta">
-        <span className={`score-pill score-pill--${scoreTone(lead.score)}`}>
-          <strong>{lead.score}</strong>
-          <small>{temperature}</small>
+        <span className="lead-card__actions">
+          <button type="button" onClick={() => onSelect(lead)}>Abrir ficha</button>
+          <button type="button" onClick={() => onAdvance?.(lead)}>Avanzar</button>
         </span>
-        <span className={`status-pill status-pill--${statusTone(lead.status)}`}>{shortStatus(lead.status)}</span>
       </span>
-    </motion.button>
+    </motion.article>
   );
 }
 
 function cardSignals(lead: Lead) {
   return [
-    signal("ig", "IG", "Instagram", Boolean(lead.instagramUrl), lead.instagramStatus === "pendiente"),
-    signal("fb", "FB", "Facebook", Boolean(lead.facebookUrl), false),
-    signal("web", "W", "Web", Boolean(lead.website), false),
+    signal("maps", "Google", "Google Maps", Boolean(lead.googleMapsUrl || lead.signals.googleProfile), false),
     signal("wa", "WA", "WhatsApp", Boolean(lead.whatsappUrl || lead.phone), false),
-    signal("maps", "G", "Google Maps", Boolean(lead.googleMapsUrl || lead.signals.googleProfile), false),
-    signal("media", "AV", "Visual", Boolean(lead.googlePhotos >= 12 || lead.contentUse === "Muy trabajado"), lead.contentUse === "Pendiente")
+    signal("ig", lead.instagramUrl ? "IG" : "Sin IG", "Instagram", Boolean(lead.instagramUrl), lead.instagramStatus === "pendiente"),
+    signal("fb", lead.facebookUrl ? "FB" : "Sin FB", "Facebook", Boolean(lead.facebookUrl), false),
+    signal("web", lead.website ? "Web" : "Sin web", "Web", Boolean(lead.website), false),
+    signal("media", lead.contentUse, "Contenido", lead.contentUse === "Activo" || lead.contentUse === "Muy trabajado", lead.contentUse === "Pendiente")
   ];
 }
 
@@ -93,10 +93,19 @@ function signal(id: string, short: string, label: string, active: boolean, pendi
   };
 }
 
+function mainGap(lead: Lead) {
+  if (!lead.instagramUrl) return "Instagram pendiente";
+  if (!lead.website) return "sin web/landing";
+  if (!lead.whatsappUrl && !lead.phone) return "contacto poco claro";
+  if (lead.contentUse === "Sin uso" || lead.contentUse === "Flojo") return `contenido ${lead.contentUse.toLowerCase()}`;
+  if (!lead.facebookUrl) return "Facebook pendiente";
+  return lead.scoreDigitalGap && lead.scoreDigitalGap >= 55 ? "captación sin sistema" : "optimizar conversión";
+}
+
 function shortStatus(status: Lead["status"]) {
   const labels: Partial<Record<Lead["status"], string>> = {
     "Reunión agendada": "Reunión",
-    "Diagnóstico hecho": "Diagnóstico",
+    "Diagnóstico hecho": "Visitado",
     "Propuesta enviada": "Propuesta",
     "No contactar": "No contactar"
   };

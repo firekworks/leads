@@ -11,6 +11,7 @@ import { MapWorkspace } from "@/components/MapWorkspace";
 import { PipelineBoard } from "@/components/PipelineBoard";
 import { RoutePlanner } from "@/components/RoutePlanner";
 import { useInternalAuth } from "@/components/AuthGate";
+import { estimateMonthlyValue } from "@/lib/scoring";
 import {
   createBlankLead,
   exportLeadsToCsv,
@@ -22,8 +23,10 @@ import { leads as seedLeads, statuses } from "@/lib/mock-leads";
 import type { ContentUse, FollowersBucket, Lead, LeadActivity, LeadNote, LeadStatus, LeadTask, RouteStop } from "@/types/lead";
 
 type LeadsWorkspaceProps = {
-  initialView: "radar" | "leads" | "route" | "pipeline";
+  initialView: "opportunities" | "pipeline";
 };
+
+type OpportunityMode = "list" | "map" | "route";
 
 type EnrichResponse = Partial<Pick<Lead, "description" | "instagramUrl" | "facebookUrl" | "whatsappUrl" | "logoUrl" | "websiteTitle">> & {
   error?: string;
@@ -31,20 +34,27 @@ type EnrichResponse = Partial<Pick<Lead, "description" | "instagramUrl" | "faceb
 
 const followersBuckets: FollowersBucket[] = ["Pendiente", "Sin cuenta", "< 1.000", "1.000 - 5.000", "+5.000"];
 const contentUses: ContentUse[] = ["Pendiente", "Sin uso", "Flojo", "Activo", "Muy trabajado"];
-const targetCities = ["Castalla", "Ibi", "Onil", "Tibi", "Biar", "Sax", "Elda", "Petrer"];
-const PAGE_SIZE = 70;
+const targetCities = ["Castalla", "Ibi", "Onil", "Biar", "Tibi", "Sax", "Elda", "Petrer", "Villena"];
+const PAGE_SIZE = 25;
 const quickViews = [
-  { id: "all", label: "Todo", icon: "store" },
-  { id: "hot", label: "Calientes", icon: "flame" },
+  { id: "top", label: "Top oportunidades", icon: "star" },
+  { id: "hot", label: "Muy calientes", icon: "flame" },
+  { id: "pendingVisit", label: "Listos visita", icon: "route" },
   { id: "noInstagram", label: "Sin IG", icon: "instagram" },
   { id: "noWeb", label: "Sin web", icon: "web" },
-  { id: "pendingVisit", label: "Pendiente visita", icon: "route" },
-  { id: "discard", label: "Revisar descarte", icon: "ban" }
+  { id: "discard", label: "Revisar descartes", icon: "ban" }
 ] as const;
+
+const opportunityModes: Array<{ id: OpportunityMode; label: string; icon: string }> = [
+  { id: "list", label: "Lista", icon: "store" },
+  { id: "map", label: "Mapa", icon: "map" },
+  { id: "route", label: "Ruta", icon: "route" }
+];
 
 export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const { accessToken, profile } = useInternalAuth();
   const [leadItems, setLeadItems] = useState<Lead[]>(seedLeads);
+  const [mode, setMode] = useState<OpportunityMode>("list");
   const [query, setQuery] = useState("");
   const [city, setCity] = useState("");
   const [sector, setSector] = useState("");
@@ -85,8 +95,13 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   }, [accessToken]);
 
   useEffect(() => {
-    if (initialView !== "leads") return;
-    const quick = new URLSearchParams(window.location.search).get("quick");
+    if (initialView !== "opportunities") return;
+    const params = new URLSearchParams(window.location.search);
+    const requestedMode = params.get("mode");
+    if (requestedMode === "map" || requestedMode === "route" || requestedMode === "list") {
+      setMode(requestedMode);
+    }
+    const quick = params.get("quick");
     if (quick) handleQuickView(quick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialView]);
@@ -141,32 +156,34 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 
   const filteredLeads = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return leadItems.filter((lead) => {
-      const discarded = isDiscarded(lead);
-      const matchesQuery = normalizedQuery
-        ? [lead.name, lead.city, lead.sector, lead.ownerName, lead.websiteTitle, lead.nextAction]
-            .join(" ")
-            .toLowerCase()
-            .includes(normalizedQuery)
-        : true;
+    return leadItems
+      .filter((lead) => {
+        const discarded = isDiscarded(lead);
+        const matchesQuery = normalizedQuery
+          ? [lead.name, lead.city, lead.sector, lead.ownerName, lead.websiteTitle, lead.nextAction, lead.pain, lead.diagnosis]
+              .join(" ")
+              .toLowerCase()
+              .includes(normalizedQuery)
+          : true;
 
-      return (
-        (status ? true : !discarded) &&
-        matchesQuery &&
-        (!city || lead.city === city) &&
-        (!sector || lead.sector === sector) &&
-        (!status || lead.status === status) &&
-        (!followersBucket || lead.followersBucket === followersBucket) &&
-        (!contentUse || lead.contentUse === contentUse) &&
-        (!withoutInstagram || !lead.instagramUrl) &&
-        (!withoutFacebook || !lead.facebookUrl) &&
-        (!withoutWeb || !lead.website) &&
-        (!withoutWhatsapp || !lead.whatsappUrl) &&
-        (!withoutPhone || !lead.phone) &&
-        (!contactEasyOnly || Boolean(lead.phone || lead.whatsappUrl)) &&
-        (!minScore || lead.score >= minScore)
-      );
-    });
+        return (
+          (status ? true : !discarded) &&
+          matchesQuery &&
+          (!city || lead.city === city) &&
+          (!sector || lead.sector === sector) &&
+          (!status || lead.status === status) &&
+          (!followersBucket || lead.followersBucket === followersBucket) &&
+          (!contentUse || lead.contentUse === contentUse) &&
+          (!withoutInstagram || !lead.instagramUrl) &&
+          (!withoutFacebook || !lead.facebookUrl) &&
+          (!withoutWeb || !lead.website) &&
+          (!withoutWhatsapp || !lead.whatsappUrl) &&
+          (!withoutPhone || !lead.phone) &&
+          (!contactEasyOnly || Boolean(lead.phone || lead.whatsappUrl)) &&
+          (!minScore || lead.score >= minScore)
+        );
+      })
+      .sort(sortOpportunityLeads);
   }, [
     city,
     contentUse,
@@ -191,16 +208,38 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
   const visibleLeads = filteredLeads.slice(0, visibleLeadCount);
   const routeStops = useMemo<RouteStop[]>(
     () =>
-      leadItems
-        .filter((lead) => !isDiscarded(lead) && targetCities.includes(lead.city))
-        .slice()
-        .sort((a, b) => b.score - a.score)
+      filteredLeads
+        .filter((lead) => !isDiscarded(lead) && (!lead.city || targetCities.includes(lead.city)))
         .map((lead, index) => ({
           ...lead,
           visitOrder: index + 1,
           routeReason: lead.score >= 80 ? "Alta prioridad" : "Visita corta"
         })),
-    [leadItems]
+    [filteredLeads]
+  );
+
+  const dashboard = useMemo(() => {
+    const active = leadItems.filter((lead) => !isDiscarded(lead));
+    const hot = active.filter((lead) => lead.score >= 80);
+    const pendingVisit = active.filter((lead) => ["Detectado", "Validado", "Prioritario"].includes(lead.status)).length;
+    const monthlyPotential = active
+      .filter((lead) => lead.score >= 70)
+      .reduce((sum, lead) => sum + estimateMonthlyValue(lead), 0);
+
+    return {
+      total: active.length,
+      hot: hot.length,
+      pendingVisit,
+      monthlyPotential
+    };
+  }, [leadItems]);
+
+  const pipelineLeads = useMemo(
+    () =>
+      leadItems
+        .filter((lead) => (!city || lead.city === city) && (!sector || lead.sector === sector))
+        .sort(sortOpportunityLeads),
+    [city, leadItems, sector]
   );
 
   function clearFilters() {
@@ -221,11 +260,17 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
 
   function handleQuickView(view: string) {
     clearFilters();
-    if (view === "hot") setMinScore(70);
+    if (view === "hot") setMinScore(80);
     if (view === "noInstagram") setWithoutInstagram(true);
     if (view === "noWeb") setWithoutWeb(true);
     if (view === "pendingVisit") setStatus("Prioritario");
     if (view === "discard") setStatus("No contactar");
+  }
+
+  function changeMode(nextMode: OpportunityMode) {
+    setMode(nextMode);
+    const url = nextMode === "list" ? "/opportunities" : `/opportunities?mode=${nextMode}`;
+    window.history.replaceState(null, "", url);
   }
 
   function handleSelect(lead: Lead) {
@@ -252,6 +297,10 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
       manualOverride: !discard && (lead.isInvalid || lead.isDisqualified) ? true : lead.manualOverride,
       updatedAt: new Date().toISOString()
     });
+  }
+
+  async function handleAdvanceLead(lead: Lead) {
+    await handleStatusChange(lead, nextStatus(lead.status));
   }
 
   async function undoLastMove() {
@@ -298,9 +347,9 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
         lastRefreshedAt: new Date().toISOString()
       };
       await handleSaveLead(nextLead);
-      setSyncMessage(enriched.error ? `Parcial: ${enriched.error}` : "Enriquecido");
+      setSyncMessage(enriched.error ? `Parcial: ${enriched.error}` : "Ficha completada");
     } catch (error) {
-      setSyncMessage(error instanceof Error ? error.message : "No se pudo enriquecer");
+      setSyncMessage(error instanceof Error ? error.message : "No se pudo completar");
     } finally {
       setEnrichingId("");
     }
@@ -497,94 +546,132 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
     );
   }
 
+  const isPipeline = initialView === "pipeline";
+
   return (
     <main className="app">
       <Background />
-      <AppShell currentView={initialView} userLabel={`${profile.role} · ${profile.email}`} sourceLabel={dataSource === "supabase" ? "Activo" : syncMessage}>
+      <AppShell currentView={isPipeline ? "pipeline" : "opportunities"} userLabel={`${profile.role} · ${profile.email}`} sourceLabel={dataSource === "supabase" ? "Activo" : syncMessage}>
         <header className="workspace-header workspace-header--compact">
           <div>
             <p className="eyebrow">Firekworks Leads</p>
-            <h1>{viewTitle(initialView)}</h1>
-            <p className="workspace-subtitle">{viewSubtitle(initialView)}</p>
+            <h1>{isPipeline ? "Pipeline comercial" : "Oportunidades locales"}</h1>
+            <p className="workspace-subtitle">
+              {isPipeline
+                ? "Avanza comercios por fase sin perder la próxima acción."
+                : "Prioriza comercios por temperatura, brecha digital y facilidad de contacto."}
+            </p>
           </div>
           <div className="header-actions">
             <span className={`source-pill source-pill--${dataSource}`}>{syncMessage}</span>
             {lastMove ? (
               <button className="button button--ghost" type="button" onClick={undoLastMove}>Deshacer</button>
             ) : null}
-            {initialView === "leads" ? (
-              <>
-                <button className="button button--ghost" type="button" onClick={() => exportLeadsToCsv(filteredLeads)}>CSV</button>
-                <button className="button" type="button" onClick={handleNewLead}>
-                  <span className="css-icon css-icon--plus" />
-                  Nuevo
-                </button>
-              </>
-            ) : null}
+            <button className="button button--ghost" type="button" onClick={() => exportLeadsToCsv(filteredLeads)}>CSV</button>
+            <button className="button" type="button" onClick={handleNewLead}>
+              <span className="css-icon css-icon--plus" />
+              Nuevo lead
+            </button>
           </div>
         </header>
 
-        <AnimatePresence mode="wait">
-          {initialView === "leads" ? (
-            <motion.section key="leads" className="queue-layout queue-layout--with-panel" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <div className="queue-primary">
-                {renderFilters()}
+        {!isPipeline ? (
+          <>
+            <section className="kpi-grid" aria-label="Resumen comercial">
+              <KpiCard label="Total leads" value={dashboard.total} />
+              <KpiCard label="Muy calientes" value={dashboard.hot} tone="hot" />
+              <KpiCard label="Pendientes visita" value={dashboard.pendingVisit} />
+              <KpiCard label="Potencial mensual" value={`${dashboard.monthlyPotential.toLocaleString("es-ES")}€`} tone="money" />
+            </section>
 
-                <div className="lead-list lead-list--queue">
-                  {filteredLeads.length ? (
-                    <>
-                      <div className="list-status">
-                        <span>{visibleLeads.length} de {filteredLeads.length}</span>
-                        {visibleLeads.length < filteredLeads.length ? (
-                          <button type="button" onClick={() => setVisibleLeadCount((current) => current + PAGE_SIZE)}>Ver más</button>
-                        ) : null}
-                      </div>
-                      {visibleLeads.map((lead) => (
-                        <LeadCard key={lead.id} lead={lead} active={lead.id === selectedId} onSelect={handleSelect} />
-                      ))}
-                    </>
-                  ) : (
-                    <div className="empty-panel">
-                      <strong>Sin resultados</strong>
-                      <span>Ajusta filtros o revisa comercios pendientes.</span>
+            {renderFilters()}
+
+            <div className="mode-switch" role="tablist" aria-label="Vista de oportunidades">
+              {opportunityModes.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={mode === item.id ? "mode-switch__item mode-switch__item--active" : "mode-switch__item"}
+                  onClick={() => changeMode(item.id)}
+                >
+                  <span className={`css-icon css-icon--${item.icon}`} aria-hidden="true" />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <AnimatePresence mode="wait">
+              <motion.section key={mode} className="queue-layout queue-layout--with-panel" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+                <div className="queue-primary">
+                  {mode === "list" ? (
+                    <div className="lead-list lead-list--queue">
+                      {filteredLeads.length ? (
+                        <>
+                          <div className="list-status">
+                            <span>Top {visibleLeads.length} de {filteredLeads.length} oportunidades</span>
+                            {visibleLeads.length < filteredLeads.length ? (
+                              <button type="button" onClick={() => setVisibleLeadCount((current) => current + PAGE_SIZE)}>Ver 25 más</button>
+                            ) : null}
+                          </div>
+                          {visibleLeads.map((lead) => (
+                            <LeadCard key={lead.id} lead={lead} active={lead.id === selectedId} onSelect={handleSelect} onAdvance={handleAdvanceLead} />
+                          ))}
+                        </>
+                      ) : (
+                        <div className="empty-panel">
+                          <strong>Sin resultados</strong>
+                          <span>Ajusta filtros o revisa comercios pendientes.</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {mode === "map" ? (
+                    <MapWorkspace leads={filteredLeads} selectedId={selectedId} onSelect={handleSelect} />
+                  ) : null}
+
+                  {mode === "route" ? (
+                    <RoutePlanner
+                      stops={routeStops}
+                      onSelect={handleSelect}
+                      onMarkVisited={handleRouteVisited}
+                      onSaveRoute={handleSaveRoute}
+                      onCreateCalendar={handleCreateRouteCalendar}
+                    />
+                  ) : null}
+                </div>
+
+                <aside className="queue-detail-panel">
+                  {selectedLead ? renderDetail(selectedLead, "panel") : (
+                    <div className="empty-panel empty-panel--sticky">
+                      <strong>{mode === "route" ? "Construye una ruta" : "Selecciona un comercio"}</strong>
+                      <span>Verás motivo comercial, brecha digital, siguiente acción e historial.</span>
                     </div>
                   )}
-                </div>
-              </div>
+                </aside>
+              </motion.section>
+            </AnimatePresence>
+          </>
+        ) : (
+          <>
+            <section className="pipeline-filters" aria-label="Filtros del pipeline">
+              <select value={city} onChange={(event) => setCity(event.target.value)} aria-label="Ciudad pipeline">
+                <option value="">Todas las ciudades</option>
+                {cities.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+              <select value={sector} onChange={(event) => setSector(event.target.value)} aria-label="Sector pipeline">
+                <option value="">Todos los sectores</option>
+                {sectors.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+              <button className="button button--ghost" type="button" onClick={() => { setCity(""); setSector(""); }}>
+                Limpiar
+              </button>
+            </section>
 
-              <aside className="queue-detail-panel">
-                {selectedLead ? renderDetail(selectedLead, "panel") : (
-                  <div className="empty-panel empty-panel--sticky">
-                    <strong>Selecciona un lead</strong>
-                    <span>Verás auditoría, fuentes, demo, mensajes y acciones.</span>
-                  </div>
-                )}
-              </aside>
-            </motion.section>
-          ) : null}
-
-          {initialView === "radar" ? (
-            <motion.section key="radar" className="queue-layout queue-layout--with-panel" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <div className="queue-primary">
-                {renderFilters()}
-                <MapWorkspace leads={filteredLeads} selectedId={selectedId} onSelect={handleSelect} />
-              </div>
-              <aside className="queue-detail-panel">
-                {selectedLead ? renderDetail(selectedLead, "panel") : (
-                  <div className="empty-panel empty-panel--sticky">
-                    <strong>Elige un comercio</strong>
-                    <span>Verás diagnóstico, propuesta y visita sin perder el mapa.</span>
-                  </div>
-                )}
-              </aside>
-            </motion.section>
-          ) : null}
-
-          {initialView === "pipeline" ? (
             <motion.section key="pipeline" className="queue-layout queue-layout--with-panel" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
               <div className="queue-primary">
                 <PipelineBoard
-                  leads={leadItems}
+                  leads={pipelineLeads}
                   selectedId={selectedId}
                   onSelect={handleSelect}
                   onStatusChange={handleStatusChange}
@@ -599,48 +686,20 @@ export function LeadsWorkspace({ initialView }: LeadsWorkspaceProps) {
                 )}
               </aside>
             </motion.section>
-          ) : null}
-
-          {initialView === "route" ? (
-            <motion.section key="route" className="queue-layout queue-layout--with-panel" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <div className="queue-primary">
-                <RoutePlanner
-                  stops={routeStops}
-                  onSelect={handleSelect}
-                  onMarkVisited={handleRouteVisited}
-                  onSaveRoute={handleSaveRoute}
-                  onCreateCalendar={handleCreateRouteCalendar}
-                />
-              </div>
-              <aside className="queue-detail-panel">
-                {selectedLead ? renderDetail(selectedLead, "panel") : (
-                  <div className="empty-panel empty-panel--sticky">
-                    <strong>Construye una ruta</strong>
-                    <span>Añade paradas y abre fichas para preparar cada visita.</span>
-                  </div>
-                )}
-              </aside>
-            </motion.section>
-          ) : null}
-
-        </AnimatePresence>
+          </>
+        )}
       </AppShell>
     </main>
   );
 }
 
-function viewTitle(view: LeadsWorkspaceProps["initialView"]) {
-  if (view === "radar") return "Radar";
-  if (view === "pipeline") return "Pipeline";
-  if (view === "route") return "Ruta";
-  return "Leads";
-}
-
-function viewSubtitle(view: LeadsWorkspaceProps["initialView"]) {
-  if (view === "radar") return "Mapa local de oportunidades para visitas presenciales.";
-  if (view === "pipeline") return "Cinco fases claras para decidir el siguiente movimiento.";
-  if (view === "route") return "Planifica una ruta de visitas por ciudad y temperatura.";
-  return "Cola limpia para investigar, priorizar y abrir fichas comerciales.";
+function KpiCard({ label, value, tone }: { label: string; value: number | string; tone?: "hot" | "money" }) {
+  return (
+    <article className={tone ? `kpi-card kpi-card--${tone}` : "kpi-card"}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
 }
 
 function uniqueOptions(values: string[]) {
@@ -649,4 +708,25 @@ function uniqueOptions(values: string[]) {
 
 function isDiscarded(lead: Lead) {
   return lead.isInvalid || Boolean(lead.isDisqualified) || ["No contactar", "No encaja", "Perdido"].includes(lead.status);
+}
+
+function sortOpportunityLeads(a: Lead, b: Lead) {
+  return b.score - a.score || b.reviews - a.reviews || a.name.localeCompare(b.name, "es");
+}
+
+function nextStatus(status: LeadStatus): LeadStatus {
+  const next: Partial<Record<LeadStatus, LeadStatus>> = {
+    Detectado: "Validado",
+    Validado: "Prioritario",
+    Prioritario: "Contactado",
+    Contactado: "Respondió",
+    Respondió: "Reunión agendada",
+    "Reunión agendada": "Diagnóstico hecho",
+    "Diagnóstico hecho": "Propuesta enviada",
+    "Propuesta enviada": "Negociación",
+    Negociación: "Ganado",
+    Perdido: "No contactar",
+    "No encaja": "No contactar"
+  };
+  return next[status] || status;
 }

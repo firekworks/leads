@@ -1,10 +1,5 @@
-import { AuthGate } from "@/components/AuthGate";
-import { LeadsWorkspace } from "@/components/LeadsWorkspace";
+import { redirect } from "next/navigation";
 
 export default function RoutePage() {
-  return (
-    <AuthGate>
-      <LeadsWorkspace initialView="route" />
-    </AuthGate>
-  );
+  redirect("/opportunities?mode=route");
 }

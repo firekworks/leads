@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function LegacyRutaPage() {
-  redirect("/route");
+  redirect("/opportunities?mode=route");
 }

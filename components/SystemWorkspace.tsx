@@ -81,9 +81,9 @@ export function SystemWorkspace() {
             <SystemRow label="Stats bridge" value="Preparado" />
           </SystemPanel>
 
-          <SystemPanel title="Enriquecimiento">
+          <SystemPanel title="Datos e integraciones">
             <SystemAction label="Geocodificar pendientes" onClick={() => runSystemAction("/api/leads/geocode-batch", "Geocodificar")} />
-            <SystemAction label="Enriquecer web/redes" onClick={() => runSystemAction("/api/leads/enrich-batch", "Enriquecer")} />
+            <SystemAction label="Completar fichas pendientes" onClick={() => runSystemAction("/api/leads/enrich-batch", "Completar fichas")} />
             <SystemAction label="Recalcular scoring" onClick={() => runSystemAction("/api/leads/recalculate-batch", "Scoring")} />
             <SystemRow label="Google Places" value="Nunca hace coste sin allowPaidRequests" />
             <SystemRow label="Instagram/Facebook" value="Manual o API autorizada" />
@@ -99,11 +99,11 @@ export function SystemWorkspace() {
           </SystemPanel>
 
           <SystemPanel title="Scoring" href="/system/scoring">
-            <SystemRow label="Demanda local" value="25%" />
-            <SystemRow label="Capacidad pago" value="25%" />
-            <SystemRow label="Brecha digital" value="25%" />
-            <SystemRow label="Encaje Firekworks" value="15%" />
-            <SystemRow label="Visitabilidad" value="10%" />
+            <SystemRow label="Demanda visible" value="20 pts" />
+            <SystemRow label="Brecha digital" value="25 pts" />
+            <SystemRow label="Contacto" value="15 pts" />
+            <SystemRow label="Potencial económico" value="20 pts" />
+            <SystemRow label="Cercanía + encaje" value="20 pts" />
             <SystemRow label="Penalizaciones" value="Públicos/cadenas/sin datos" />
           </SystemPanel>
         </section>
